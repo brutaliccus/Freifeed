@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "269864356157-05t5s39hrr45f3fle7u6lrr18gtnpred.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.freifeed.app",
+            "certificate_hash": "a99f35c5ee4385e07d4b3757476feb38c979be9c"
+          }
+        },
+        {
+          "client_id": "269864356157-ba3ptcn7r7tl0gv5v6sodf1pdae0v3af.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.freifeed.app",
+            "certificate_hash": "3706af6fe7664c192c9c99d422f14c425f3d6c05"
+          }
+        },
+        {
           "client_id": "269864356157-3r1fhq0598g0asc9pl0r9h5dc4qje5n7.apps.googleusercontent.com",
           "client_type": 3
         }

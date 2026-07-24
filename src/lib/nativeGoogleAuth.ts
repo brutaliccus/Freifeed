@@ -28,9 +28,8 @@ function formatGoogleSignInError(err: unknown): string {
   }
   if (code === '10' || msg.includes('Something went wrong')) {
     return (
-      'Google rejected sign-in (error 10). In Firebase → Project settings → Your Android app ' +
-      '(com.freifeed.app), add debug SHA-1: A9:9F:35:C5:EE:43:85:E0:7D:4B:37:57:47:6F:EB:38:C9:79:BE:9C ' +
-      'then re-download google-services.json into android/app/ and rebuild the APK.'
+      'Google rejected sign-in (error 10). The APK signing certificate is not registered in Firebase. ' +
+      'Add this build’s SHA-1 under Project settings → Your Android app (com.freifeed.app), then rebuild.'
     )
   }
   return msg || 'Google sign-in failed'
