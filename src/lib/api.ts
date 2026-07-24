@@ -228,6 +228,12 @@ interface RawMilkLot {
   remainingOz: number
   storage: MilkStorage
   feedingId: string | null
+  note: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function parseFeeding(raw: RawFeeding): Feeding {
   return {
     id: raw.id,
     type: raw.type ?? 'nursing',
