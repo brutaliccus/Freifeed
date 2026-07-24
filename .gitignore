@@ -43,3 +43,7 @@ tmp-*.svg
 
 # Local signing material (never commit)
 .secrets/
+
+# Python
+**/__pycache__/
+*.py[cod]
