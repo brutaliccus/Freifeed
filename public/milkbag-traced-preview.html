@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Milk bag traced SVG preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #f4f0e8;
+        color: #1a3a5c;
+        padding: 1.5rem;
+      }
+      h1 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+      p { margin: 0 0 1rem; font-size: 0.9rem; opacity: 0.85; }
+      .grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+      .card {
+        width: 12rem;
+        padding: 0.75rem;
+        border-radius: 12px;
+        text-align: center;
+      }
+      .card--cream { background: #f4f0e8; border: 1px solid #ddd; }
+      .card--white { background: #fff; border: 1px solid #ddd; }
+      .card--dark { background: #1a3a5c; color: #fff; }
+      .card img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .card h2 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin: 0.5rem 0 0;
+      }
+      .chip-demo {
+        position: relative;
+        width: 6.75rem;
+        margin: 1rem auto 0;
+      }
+      .chip-demo img { width: 100%; }
+      .chip-demo .meta {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 28% 12% 18%;
+        font-weight: 700;
+        font-size: 0.72rem;
+        line-height: 1.15;
+        color: #1a3a5c;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Potraced milk bag (from your art PNG)</h1>
+    <p>
+      Source: <code>src/assets/milkbag-art.png</code> →
+      <code>public/milkbag-traced.svg</code> (21 curves, <code>fill="currentColor"</code>)
+    </p>
+    <div class="grid">
+      <div class="card card--cream">
+        <img src="milkbag-traced.svg" alt="" style="color: #1a3a5c" />
+        <h2>Cream + navy</h2>
+      </div>
+      <div class="card card--white">
+        <img src="milkbag-traced.svg" alt="" style="color: #2d5a87" />
+        <h2>White + blue</h2>
+      </div>
+      <div class="card card--dark">
+        <img src="milkbag-traced.svg" alt="" style="color: #e8eef5" />
+        <h2>Dark + light</h2>
+      </div>
+    </div>
+    <div class="chip-demo">
+      <img src="milkbag-traced.svg" alt="" style="color: #1a3a5c" />
+      <div class="meta">
+        <span>Today</span>
+        <span>2:30p</span>
+        <span>4 oz</span>
+      </div>
+    </div>
+    <p style="margin-top: 1rem">
+      Re-run trace: <code>python scripts/trace_milkbag.py</code>
+    </p>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+**/node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+functions/lib
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Android signing / local secrets
+*.keystore
+*.jks
+android/keystore.properties
+android/freifeed-release.keystore
+android/local.properties
+android/.gradle
+android/**/build
+
+# Temp assets
+tmp-*.svg
+.firebase
+
+# Local signing material (never commit)
+.secrets/

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="FreiFeed">
+  <defs>
+    <linearGradient id="skinBtn" x1="18%" y1="12%" x2="82%" y2="88%">
+      <stop offset="0%" stop-color="#f0ddd2" />
+      <stop offset="48%" stop-color="#e4c8b8" />
+      <stop offset="100%" stop-color="#d8b4a4" />
+    </linearGradient>
+  </defs>
+  <!-- Same skin-toned circle as the add-feed button -->
+  <circle cx="50" cy="50" r="48" fill="url(#skinBtn)" stroke="rgba(200, 168, 148, 0.45)" stroke-width="1.5" />
+  <!-- Concentric breast mark (ring + darker nipple) -->
+  <circle cx="50" cy="50" r="22" fill="#e0c4b4" />
+  <circle cx="50" cy="50" r="12.5" fill="#c9a090" />
+</svg>

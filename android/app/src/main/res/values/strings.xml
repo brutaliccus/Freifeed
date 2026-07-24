@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Buba</string>
+    <string name="title_activity_main">Buba</string>
+    <string name="package_name">com.freifeed.app</string>
+    <string name="custom_url_scheme">com.freifeed.app</string>
+    <!-- Required by @codetrix-studio/capacitor-google-auth (Web client ID for requestIdToken / Firebase). -->
+    <string name="server_client_id">269864356157-3r1fhq0598g0asc9pl0r9h5dc4qje5n7.apps.googleusercontent.com</string>
+</resources>

@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userHouseholdId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId;
+    }
+
+    function isHouseholdMember(householdId) {
+      return signedIn()
+        && userHouseholdId() == householdId;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /households/{householdId}/meta/{docId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/feedings/{feedingId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/measurements/{measurementId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/notes/{noteId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/diapers/{diaperId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/milkLots/{lotId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /households/{householdId}/medicines/{medicineId} {
+      allow read: if isHouseholdMember(householdId);
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

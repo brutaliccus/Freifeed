@@ -1,0 +1,130 @@
+name: Release Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+      version_code:
+        description: 'Android versionCode integer (must increase each release)'
+        required: true
+        default: '1'
+      prerelease:
+        description: 'Mark GitHub release as prerelease'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build web + Capacitor sync
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Apply version to Gradle
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          path = "android/app/build.gradle"
+          text = open(path, encoding="utf-8").read()
+          text = re.sub(r"versionCode\s+\d+", f"versionCode {os.environ['VERSION_CODE']}", text, count=1)
+          text = re.sub(r'versionName\s+"[^"]+"', f'versionName "{os.environ["VERSION_NAME"]}"', text, count=1)
+          open(path, "w", encoding="utf-8").write(text)
+          print(f"Set versionName={os.environ['VERSION_NAME']} versionCode={os.environ['VERSION_CODE']}")
+          PY
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 secret is required to sign the release APK."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/freifeed-release.keystore
+          echo "FREIFEED_STORE_FILE=$GITHUB_WORKSPACE/android/freifeed-release.keystore" >> "$GITHUB_ENV"
+          echo "FREIFEED_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "FREIFEED_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "FREIFEED_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+
+      - name: Stage artifacts
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          mkdir -p artifacts
+          APK_SRC=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$APK_SRC" ]; then
+            echo "No release APK found"
+            find android/app/build/outputs -type f || true
+            exit 1
+          fi
+          APK_NAME="freifeed-${VERSION_NAME}.apk"
+          cp "$APK_SRC" "artifacts/$APK_NAME"
+          cat > artifacts/update-info.json <<EOF
+          {
+            "versionName": "${VERSION_NAME}",
+            "versionCode": ${VERSION_CODE},
+            "fileName": "${APK_NAME}"
+          }
+          EOF
+          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+          ls -lah artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version_name }}
+          name: Freifeed ${{ inputs.version_name }}
+          body: |
+            ## Freifeed ${{ inputs.version_name }}
+
+            First-party Android APK release (versionCode ${{ inputs.version_code }}).
+
+            Install via the Freifeed app (**Profile → App → Check for updates**) or download the APK below.
+          draft: false
+          prerelease: ${{ inputs.prerelease == 'true' }}
+          files: |
+            artifacts/${{ env.APK_NAME }}
+            artifacts/update-info.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

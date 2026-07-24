@@ -1,0 +1,78 @@
+/* Desktop browser: center column ~⅓ viewport (native apps stay full width). */
+
+@media (min-width: 769px) {
+  html.platform-web {
+    --app-column-width: 33.333vw;
+  }
+}
+
+html.platform-web #root {
+  width: 100%;
+  max-width: var(--app-column-width);
+  margin-inline: auto;
+  min-height: 100dvh;
+  position: relative;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lavender) 14%, transparent),
+    0 0 100px rgba(0, 0, 0, 0.42);
+}
+
+html.platform-web.app-layout-home #root,
+html.platform-web.app-layout-daily #root {
+  width: var(--app-column-width);
+  max-width: var(--app-column-width);
+  left: 50%;
+  transform: translateX(-50%);
+  margin-inline: 0;
+}
+
+html.platform-web .app-shell,
+html.platform-web .app-shell--daily,
+html.platform-web .app-shell--home {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+}
+
+html.platform-web.app-layout-daily .app-shell,
+html.platform-web.app-layout-home .app-shell {
+  max-width: 100%;
+}
+
+html.platform-web .bottom-nav {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: var(--app-column-width);
+  max-width: var(--app-column-width);
+}
+
+html.platform-web .feed-player,
+html.platform-web .feed-players-stack {
+  width: min(calc(var(--app-column-width) - 1rem), calc(100vw - 1rem));
+  max-width: min(calc(var(--app-column-width) - 1rem), calc(100vw - 1rem));
+}
+
+html.platform-web .feed-drawer {
+  max-width: var(--app-column-width);
+}
+
+html.platform-web .firestore-banner {
+  max-width: var(--app-column-width);
+}
+
+html.platform-web .page-fab {
+  right: max(1rem, calc(50vw - var(--app-column-width) / 2 + 1rem));
+}
+
+html.platform-web .sync-indicator {
+  right: max(0.5rem, calc(50vw - var(--app-column-width) / 2 + 0.5rem));
+}
+
+html.platform-web .in-app-banner-stack,
+html.platform-web .app-shell--daily .in-app-banner-stack {
+  width: var(--app-column-width);
+  max-width: var(--app-column-width);
+  left: 50%;
+  transform: translateX(-50%);
+}

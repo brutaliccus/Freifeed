@@ -1,0 +1,7 @@
+# PNG → SVG tracing (scripts/trace_milkbag.py)
+# Note: the original `pip install potrace` package is unavailable on PyPI for Python 3.13;
+# we use the pure-Python fork `potracer` (import name: potrace).
+pillow>=10
+potracer>=0.0.4
+opencv-python-headless>=4.8
+svgpathtools>=1.6

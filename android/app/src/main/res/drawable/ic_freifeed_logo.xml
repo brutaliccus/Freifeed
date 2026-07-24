@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Freifeed launcher foreground (from public/favicon.svg), inset for adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <!-- Outer skin circle (r=33 → ~66dp, fits Android adaptive safe area) -->
+  <path
+      android:fillColor="#E4C8B8"
+      android:pathData="M54,21 A33,33 0 1,1 53.99,21 Z" />
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M54,21 A33,33 0 1,1 53.99,21 Z"
+      android:strokeColor="#C8A894"
+      android:strokeWidth="1.1" />
+  <!-- Middle ring -->
+  <path
+      android:fillColor="#E0C4B4"
+      android:pathData="M54,38.25 A15.75,15.75 0 1,1 53.99,38.25 Z" />
+  <!-- Nipple -->
+  <path
+      android:fillColor="#C9A090"
+      android:pathData="M54,45.25 A8.75,8.75 0 1,1 53.99,45.25 Z" />
+</vector>

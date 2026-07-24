@@ -1,0 +1,125 @@
+/* Theme palettes — structural + skin tokens live in index.css :root */
+
+[data-theme='buba'],
+:root:not([data-theme]) {
+  --bg-deep: #14111a;
+  --bg-card: #1e1a26;
+  --bg-elevated: #262033;
+  --text: #f5eef8;
+  --text-muted: #a89bb5;
+  --sage: #8fb89a;
+  --blush: #d4a5b5;
+  --lavender: #b8a8d8;
+  --cream: #f0e6d8;
+  --accent: #c9a0b8;
+  --accent-strong: #e8b4cc;
+  --danger: #c97b8b;
+  --left-side: #8fb89a;
+  --right-side: #b8a8d8;
+  --soft-glow-inner: rgba(232, 180, 204, 0.25);
+  --soft-glow-outer: rgba(184, 168, 216, 0.11);
+  --gradient-a: rgba(143, 184, 154, 0.12);
+  --gradient-b: rgba(184, 168, 216, 0.08);
+  --gradient-c: rgba(212, 165, 181, 0.08);
+  --nav-track-bg: rgba(20, 17, 26, 0.92);
+  --nav-track-border: rgba(184, 168, 216, 0.12);
+  --panel-overlay: rgba(10, 8, 14, 0.55);
+  --panel-glass: rgba(30, 26, 38, 0.96);
+  --panel-border: rgba(201, 160, 184, 0.28);
+  --logo-filter: none;
+  --logo-blend-mode: lighten;
+  --tracker-diaper: #5b9bd5;
+  --tracker-milk: #b8a8d8;
+  --tracker-milk-active: #c9b8e8;
+  --tracker-medicine: #e8b4cc;
+  --tracker-pump: #6eb8d4;
+  --tracker-poop: #a8844a;
+  --tracker-notes: #c9b8a0;
+  --tracker-measurements: #9ec4e8;
+  --fab-ring: rgba(184, 168, 216, 0.12);
+  --nav-home-border: rgba(184, 168, 216, 0.45);
+  --nav-home-shadow: rgba(184, 168, 216, 0.09);
+  --nav-home-active-glow: rgba(232, 180, 204, 0.19);
+}
+
+[data-theme='ocean'] {
+  --bg-deep: #0d1118;
+  --bg-card: #151c28;
+  --bg-elevated: #1a2433;
+  --text: #e8eef5;
+  --text-muted: #8a9bb0;
+  --sage: #5a9aad;
+  --blush: #7aa8c9;
+  --lavender: #6b8fc4;
+  --cream: #dce8f0;
+  --accent: #5b8fd4;
+  --accent-strong: #7eb3e8;
+  --danger: #d4848f;
+  --left-side: #5a9aad;
+  --right-side: #6b8fc4;
+  --soft-glow-inner: rgba(126, 179, 232, 0.28);
+  --soft-glow-outer: rgba(107, 143, 196, 0.14);
+  --gradient-a: rgba(90, 154, 173, 0.14);
+  --gradient-b: rgba(107, 143, 196, 0.1);
+  --gradient-c: rgba(91, 143, 212, 0.08);
+  --nav-track-bg: rgba(13, 17, 24, 0.94);
+  --nav-track-border: rgba(107, 143, 196, 0.18);
+  --panel-overlay: rgba(6, 8, 12, 0.62);
+  --panel-glass: rgba(21, 28, 40, 0.96);
+  --panel-border: rgba(91, 143, 212, 0.32);
+  --logo-filter: hue-rotate(185deg) saturate(1.12) brightness(1.06);
+  --logo-blend-mode: lighten;
+  --tracker-diaper: #5a9aad;
+  --tracker-milk: #6b8fc4;
+  --tracker-milk-active: #8aa8dc;
+  --tracker-medicine: #7eb3e8;
+  --tracker-pump: #4a8fc4;
+  --tracker-poop: #b89550;
+  --tracker-notes: #8aa8c4;
+  --tracker-measurements: #6eb8e8;
+  --fab-ring: rgba(107, 143, 196, 0.16);
+  --nav-home-border: rgba(107, 143, 196, 0.48);
+  --nav-home-shadow: rgba(107, 143, 196, 0.12);
+  --nav-home-active-glow: rgba(126, 179, 232, 0.22);
+}
+
+[data-theme='sage'] {
+  --bg-deep: #101612;
+  --bg-card: #1a221c;
+  --bg-elevated: #222b24;
+  --text: #ecf4ee;
+  --text-muted: #9bb0a0;
+  --sage: #9fd4a8;
+  --blush: #b8dcc0;
+  --lavender: #a8c9b0;
+  --cream: #e8f2ea;
+  --accent: #8fcca0;
+  --accent-strong: #b8e8c4;
+  --danger: #c9888f;
+  --left-side: #9fd4a8;
+  --right-side: #a8c9b0;
+  --soft-glow-inner: rgba(184, 232, 196, 0.26);
+  --soft-glow-outer: rgba(168, 201, 176, 0.12);
+  --gradient-a: rgba(159, 212, 168, 0.14);
+  --gradient-b: rgba(168, 201, 176, 0.1);
+  --gradient-c: rgba(143, 204, 160, 0.08);
+  --nav-track-bg: rgba(16, 22, 18, 0.94);
+  --nav-track-border: rgba(168, 201, 176, 0.16);
+  --panel-overlay: rgba(8, 12, 10, 0.58);
+  --panel-glass: rgba(26, 34, 28, 0.96);
+  --panel-border: rgba(143, 204, 160, 0.3);
+  --logo-filter: hue-rotate(95deg) saturate(0.88) brightness(1.08);
+  --logo-blend-mode: lighten;
+  --tracker-diaper: #7ab8c4;
+  --tracker-milk: #a8c9b0;
+  --tracker-milk-active: #c0dcc4;
+  --tracker-medicine: #b8e8c4;
+  --tracker-pump: #9fd4a8;
+  --tracker-poop: #a8844a;
+  --tracker-notes: #c4d4b8;
+  --tracker-measurements: #8ec4d4;
+  --fab-ring: rgba(168, 201, 176, 0.14);
+  --nav-home-border: rgba(168, 201, 176, 0.42);
+  --nav-home-shadow: rgba(168, 201, 176, 0.1);
+  --nav-home-active-glow: rgba(184, 232, 196, 0.2);
+}
