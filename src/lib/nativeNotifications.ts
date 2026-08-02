@@ -67,8 +67,6 @@ const REMINDER_ID_BASE = 32_000
 const NURSING_LONG_ID_BASE = 34_000
 /** Legacy Capacitor LocalNotifications span (cancelled on sync). */
 const NURSING_LONG_LEGACY_SPAN = 8_000
-/** Active AlarmManager id span — must match NursingSessionReminderScheduler. */
-const NURSING_LONG_ID_SPAN = 100
 
 let channelsReady = false
 let medicineActionsReady = false
