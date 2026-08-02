@@ -24,38 +24,47 @@ interface UseNursingSessionRemindersOptions {
   localSessions: ActiveFeedDraft[]
 }
 
+function payloadSignature(
+  payload: ReturnType<typeof buildNursingSessionReminderPayload>,
+): string {
+  return JSON.stringify({
+    enabled: payload.enabled,
+    thresholdMs: payload.thresholdMs,
+    sessions: payload.sessions.map((s) => [s.sessionKey, s.startAtIso, s.babyName, s.side]),
+    alertedKeys: [...payload.alertedKeys].sort(),
+  })
+}
+
 export function useNursingSessionReminders({
   householdId,
   feedings,
   babies,
   localSessions,
 }: UseNursingSessionRemindersOptions) {
-  const feedingsRef = useRef(feedings)
-  const babiesRef = useRef(babies)
-  const localSessionsRef = useRef(localSessions)
-  feedingsRef.current = feedings
-  babiesRef.current = babies
-  localSessionsRef.current = localSessions
+  const lastSigRef = useRef('')
 
   const syncReminders = useCallback(async () => {
     const native = usesNativeNotifications()
 
     if (!householdId || !getNursingSessionReminderEnabled()) {
+      lastSigRef.current = ''
       if (native) void syncNativeNursingSessionReminders(null)
       else void syncNursingSessionRemindersToServiceWorker(null)
       return
     }
 
-    const payload = buildNursingSessionReminderPayload(
-      feedingsRef.current,
-      babiesRef.current,
-      localSessionsRef.current,
-    )
+    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
 
     const activeKeys = new Set(payload.sessions.map((s) => s.sessionKey))
     pruneNursingSessionReminderAlerts(activeKeys)
 
-    if (!payload.enabled || payload.sessions.length === 0) {
+    // Rebuild after prune so alertedKeys stays accurate for the native scheduler.
+    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+    const sig = payloadSignature(next)
+    if (sig === lastSigRef.current) return
+    lastSigRef.current = sig
+
+    if (!next.enabled || next.sessions.length === 0) {
       if (native) void syncNativeNursingSessionReminders(null)
       else void syncNursingSessionRemindersToServiceWorker(null)
       return
@@ -65,27 +74,30 @@ export function useNursingSessionReminders({
       ? (await ensureNativeNotificationPermission()) ? 'granted' : 'denied'
       : await ensureNotificationPermission()
     if (perm !== 'granted') {
+      lastSigRef.current = ''
       if (native) void syncNativeNursingSessionReminders(null)
       else void syncNursingSessionRemindersToServiceWorker(null)
       return
     }
 
     if (native) {
-      await syncNativeNursingSessionReminders(payload)
+      await syncNativeNursingSessionReminders(next)
     } else {
-      await syncNursingSessionRemindersToServiceWorker(payload)
+      await syncNursingSessionRemindersToServiceWorker(next)
     }
-  }, [householdId])
+  }, [householdId, feedings, babies, localSessions])
 
   useEffect(() => {
     return subscribeNursingSessionReminderSettings(() => {
+      lastSigRef.current = ''
       void syncReminders()
     })
   }, [syncReminders])
 
   useEffect(() => {
     void syncReminders()
-    const interval = window.setInterval(() => void syncReminders(), 15_000)
+    // Backup poll in case a session starts while the tab is backgrounded and refs lag.
+    const interval = window.setInterval(() => void syncReminders(), 30_000)
     return () => window.clearInterval(interval)
   }, [syncReminders])
 }

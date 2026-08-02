@@ -810,7 +810,8 @@ async function cancelLegacyNursingLocalNotifications(): Promise<void> {
 
 /**
  * Schedule nursing-timer-still-running reminders via native AlarmManager
- * (survives app closed/idle). Replaces Capacitor LocalNotifications.
+ * (survives app closed/idle). Falls back to LocalNotifications if the plugin
+ * is missing (older APK).
  */
 export async function syncNativeNursingSessionReminders(
   payload: NursingSessionReminderSyncPayload | null,
@@ -822,7 +823,7 @@ export async function syncNativeNursingSessionReminders(
     try {
       await NursingSessionReminderNative.cancelAll()
     } catch {
-      /* plugin unavailable */
+      /* plugin unavailable on older APKs */
     }
     return
   }
@@ -831,7 +832,41 @@ export async function syncNativeNursingSessionReminders(
 
   try {
     await NursingSessionReminderNative.syncReminders({ json: JSON.stringify(payload) })
-  } catch {
-    /* plugin unavailable */
+    return
+  } catch (err) {
+    console.warn('NursingSessionReminder plugin unavailable; using LocalNotifications fallback', err)
+  }
+
+  // Fallback for APKs that predate the AlarmManager plugin.
+  const now = Date.now()
+  const schedule: {
+    id: number
+    title: string
+    body: string
+    schedule: { at: Date }
+    channelId: string
+  }[] = []
+
+  for (const session of payload.sessions) {
+    if (payload.alertedKeys.includes(session.sessionKey)) continue
+    const startMs = new Date(session.startAtIso).getTime()
+    if (Number.isNaN(startMs)) continue
+    const fireAt = startMs + payload.thresholdMs
+    const at = fireAt <= now ? new Date(now + 2_000) : new Date(fireAt)
+    const side = session.side ? ` · ${session.side}` : ''
+    schedule.push({
+      id: NURSING_LONG_ID_BASE + (stableId(session.sessionKey) % 100),
+      title: `${session.babyName} — still nursing?`,
+      body: `Nursing timer is still running${side}. Open Freifeed to stop the session.`,
+      schedule: { at },
+      channelId: REMINDER_CHANNEL,
+    })
+    if (fireAt <= now) {
+      markNursingSessionReminderAlerted(session.sessionKey)
+    }
+  }
+
+  if (schedule.length > 0) {
+    await LocalNotifications.schedule({ notifications: schedule })
   }
 }
