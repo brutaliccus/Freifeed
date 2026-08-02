@@ -34,6 +34,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MedicineAlertPlugin.class);
         registerPlugin(FeedWatchPlugin.class);
         registerPlugin(FeedReminderPlugin.class);
+        registerPlugin(NursingSessionReminderPlugin.class);
         registerPlugin(AppUpdatePlugin.class);
     }
 

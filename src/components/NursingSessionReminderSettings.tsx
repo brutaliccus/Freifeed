@@ -8,6 +8,7 @@ import {
   buildNursingSessionReminderPayload,
   syncNursingSessionRemindersToServiceWorker,
 } from '../lib/nursingSessionReminders'
+import { syncNativeNursingSessionReminders } from '../lib/nativeNotifications'
 import {
   getNursingSessionReminderEnabled,
   getNursingSessionReminderMinutes,
@@ -36,19 +37,22 @@ export function NursingSessionReminderSettings({
   const { permission, requestPermission } = useNotificationPermissionState()
   const native = usesNativeNotifications()
 
-  const pushToServiceWorker = async (nextEnabled = enabled) => {
+  const pushReminders = async (nextEnabled = enabled) => {
     if (!nextEnabled) {
-      await syncNursingSessionRemindersToServiceWorker(null)
+      if (native) await syncNativeNursingSessionReminders(null)
+      else await syncNursingSessionRemindersToServiceWorker(null)
       return
     }
     const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
-    await syncNursingSessionRemindersToServiceWorker({ ...payload, enabled: true })
+    const next = { ...payload, enabled: true }
+    if (native) await syncNativeNursingSessionReminders(next)
+    else await syncNursingSessionRemindersToServiceWorker(next)
   }
 
   const saveMinutes = async (value: number) => {
     setNursingSessionReminderMinutes(value)
     setMinutes(value)
-    if (enabled) await pushToServiceWorker(true)
+    if (enabled) await pushReminders(true)
   }
 
   const toggle = async () => {
@@ -62,7 +66,7 @@ export function NursingSessionReminderSettings({
       }
       setEnabled(next)
       setNursingSessionReminderEnabled(next)
-      await pushToServiceWorker(next)
+      await pushReminders(next)
     } finally {
       setBusy(false)
     }
@@ -78,7 +82,7 @@ export function NursingSessionReminderSettings({
       <h2>Nursing timer reminder</h2>
       <p className="muted">
         {native
-          ? 'Notify you when a nursing session has been running longer than the time you set — helpful if you forget to stop the timer.'
+          ? 'Uses Android system alarms so you still get notified if Freifeed is closed or idle — helpful if you forget to stop the timer.'
           : 'Get a notification when a nursing session has been running longer than the time you set — helpful if you forget to stop the timer.'}
       </p>
 

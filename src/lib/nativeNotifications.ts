@@ -33,13 +33,15 @@ import {
   getMedicineAlertFiredForSync,
   markMedicineAlertFired,
   pruneMedicineAlertFired,
+  shouldAlertMedicineDue,
 } from './medicineAlertState'
 import {
   buildMedicineOverdueFollowups,
   formatMedicineNotificationSubtitle,
   formatMedicineNotificationTitle,
+  isDoseDue,
+  isMedicineActiveNow,
   mostRecentDueAtMs,
-  shouldShowInAppDueBanner,
 } from './medicineSchedule'
 import { areMedicineOverdueFollowupsEnabled } from './medicineNotifications'
 import { buildMedicineNotifyPayload, type MedicineNotifyPayload } from './medicineNotifications'
@@ -50,10 +52,8 @@ import { buildMilkExpirationAlarms, MILK_EXPIRY_FIRE_STALE_MS } from './milkExpi
 import { FeedReminderNative } from './feedReminderNative'
 import type { BabyId } from '../types'
 import type { NursingSessionReminderSyncPayload } from './nursingSessionReminders'
-import {
-  hasNursingSessionReminderBeenAlerted,
-  markNursingSessionReminderAlerted,
-} from './nursingSessionReminderState'
+import { NursingSessionReminderNative } from './nursingSessionReminderNative'
+import { markNursingSessionReminderAlerted } from './nursingSessionReminderState'
 
 const REMINDER_CHANNEL = 'freifeed_feed_reminder_v1'
 
@@ -65,7 +65,10 @@ const MILK_EXPIRY_ID_SPAN = 8_000
 const FEED_ID_BASE = 31_000
 const REMINDER_ID_BASE = 32_000
 const NURSING_LONG_ID_BASE = 34_000
-const NURSING_LONG_ID_SPAN = 8_000
+/** Legacy Capacitor LocalNotifications span (cancelled on sync). */
+const NURSING_LONG_LEGACY_SPAN = 8_000
+/** Active AlarmManager id span — must match NursingSessionReminderScheduler. */
+const NURSING_LONG_ID_SPAN = 100
 
 let channelsReady = false
 let medicineActionsReady = false
@@ -265,7 +268,11 @@ async function fireNativeMedicineDueAlert(medicine: Medicine, dueMs: number): Pr
   markMedicineAlertFired(medicine.id, dueMs)
 }
 
-/** Immediate due-now alerts (as-needed + overdue required). Not tied to schedule resync. */
+/**
+ * Immediate due-now alerts for doses that have not been notified yet.
+ * Must NOT use shouldShowInAppDueBanner — required meds stay "due" until taken,
+ * which re-fired a push on every cold open.
+ */
 export async function syncMedicineDueAlerts(medicines: Medicine[]): Promise<void> {
   if (!isAndroidNative()) return
   if (!(await ensureNativeNotificationPermission())) return
@@ -273,9 +280,10 @@ export async function syncMedicineDueAlerts(medicines: Medicine[]): Promise<void
 
   const now = new Date()
   for (const medicine of medicines) {
-    if (!shouldShowInAppDueBanner(medicine, now)) continue
+    if (!isMedicineActiveNow(medicine, now) || !isDoseDue(medicine, now)) continue
     const dueMs = mostRecentDueAtMs(medicine, now)
     if (dueMs == null) continue
+    if (!shouldAlertMedicineDue(medicine.id, dueMs)) continue
     await fireNativeMedicineDueAlert(medicine, dueMs)
   }
 }
@@ -732,6 +740,20 @@ export function registerNativeNotificationListeners(handlers: NativeNotification
     unsub.push(() => h.remove())
   })
 
+  void NursingSessionReminderNative.addListener('nursingSessionReminderShown', (event) => {
+    if (!event.sessionKey) return
+    markNursingSessionReminderAlerted(event.sessionKey)
+  }).then((h) => {
+    unsub.push(() => h.remove())
+  })
+
+  void NursingSessionReminderNative.addListener('nursingSessionReminderDismiss', (event) => {
+    if (!event.sessionKey) return
+    markNursingSessionReminderAlerted(event.sessionKey)
+  }).then((h) => {
+    unsub.push(() => h.remove())
+  })
+
   void MedicineAlertNative.addListener('medicineAlertShown', (event) => {
     if (!event.medicineId || !Number.isFinite(event.dueMs)) return
     if (event.medicineId.startsWith('milk:')) {
@@ -767,57 +789,51 @@ export function registerNativeNotificationListeners(handlers: NativeNotification
   }
 }
 
+/** Cancel leftover Capacitor LocalNotifications from older builds. */
+async function cancelLegacyNursingLocalNotifications(): Promise<void> {
+  try {
+    const pending = await LocalNotifications.getPending()
+    const toCancel =
+      pending.notifications
+        ?.filter(
+          (n) =>
+            n.id != null &&
+            n.id >= NURSING_LONG_ID_BASE &&
+            n.id < NURSING_LONG_ID_BASE + NURSING_LONG_LEGACY_SPAN,
+        )
+        .map((n) => ({ id: n.id! })) ?? []
+    if (toCancel.length > 0) {
+      await LocalNotifications.cancel({ notifications: toCancel })
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Schedule nursing-timer-still-running reminders via native AlarmManager
+ * (survives app closed/idle). Replaces Capacitor LocalNotifications.
+ */
 export async function syncNativeNursingSessionReminders(
   payload: NursingSessionReminderSyncPayload | null,
 ): Promise<void> {
   if (!isAndroidNative()) return
+  await cancelLegacyNursingLocalNotifications()
+
+  if (!payload?.enabled || payload.sessions.length === 0) {
+    try {
+      await NursingSessionReminderNative.cancelAll()
+    } catch {
+      /* plugin unavailable */
+    }
+    return
+  }
+
   if (!(await ensureNativeNotificationPermission())) return
 
-  const pending = await LocalNotifications.getPending()
-  const toCancel =
-    pending.notifications
-      ?.filter(
-        (n) =>
-          n.id != null &&
-          n.id >= NURSING_LONG_ID_BASE &&
-          n.id < NURSING_LONG_ID_BASE + NURSING_LONG_ID_SPAN,
-      )
-      .map((n) => ({ id: n.id! })) ?? []
-  if (toCancel.length > 0) {
-    await LocalNotifications.cancel({ notifications: toCancel })
-  }
-
-  if (!payload?.enabled || payload.sessions.length === 0) return
-
-  const schedule: {
-    id: number
-    title: string
-    body: string
-    schedule: { at: Date }
-    channelId: string
-  }[] = []
-
-  const now = Date.now()
-  for (const session of payload.sessions) {
-    if (hasNursingSessionReminderBeenAlerted(session.sessionKey)) continue
-    const startMs = new Date(session.startAtIso).getTime()
-    if (Number.isNaN(startMs)) continue
-    const fireAt = startMs + payload.thresholdMs
-    const at = fireAt <= now ? new Date(now + 2_000) : new Date(fireAt)
-    const side = session.side ? ` · ${session.side}` : ''
-    schedule.push({
-      id: NURSING_LONG_ID_BASE + stableId(session.sessionKey) % NURSING_LONG_ID_SPAN,
-      title: `${session.babyName} — nursing still active`,
-      body: `Nursing timer is still running${side}. Open Freifeed to stop the session.`,
-      schedule: { at },
-      channelId: REMINDER_CHANNEL,
-    })
-    if (fireAt <= now) {
-      markNursingSessionReminderAlerted(session.sessionKey)
-    }
-  }
-
-  if (schedule.length > 0) {
-    await LocalNotifications.schedule({ notifications: schedule })
+  try {
+    await NursingSessionReminderNative.syncReminders({ json: JSON.stringify(payload) })
+  } catch {
+    /* plugin unavailable */
   }
 }

@@ -329,8 +329,8 @@ export function isDoseDue(medicine: Medicine, now = new Date()): boolean {
 }
 
 /**
- * In-app banner: required meds show whenever a dose is due; as-needed only once per dose window
- * (same rule as push notifications).
+ * In-app banner only: required meds stay visible while a dose is untaken.
+ * Push notifications use shouldAlertMedicineDue separately so cold opens do not re-alert.
  */
 export function shouldShowInAppDueBanner(medicine: Medicine, now = new Date()): boolean {
   if (!isMedicineActiveNow(medicine, now) || !isDoseDue(medicine, now)) return false

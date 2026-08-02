@@ -5,6 +5,7 @@ import {
   getNursingSessionReminderEnabled,
   getNursingSessionReminderThresholdMs,
 } from './nursingSessionReminderSettings'
+import { hasNursingSessionReminderBeenAlerted } from './nursingSessionReminderState'
 import {
   getInProgressFeedings,
   isFeedingInProgress,
@@ -79,7 +80,9 @@ export function buildNursingSessionReminderPayload(
     enabled,
     thresholdMs,
     sessions: items,
-    alertedKeys: [],
+    alertedKeys: items
+      .map((s) => s.sessionKey)
+      .filter((key) => hasNursingSessionReminderBeenAlerted(key)),
   }
 }
 

@@ -57,6 +57,14 @@
             android:exported="false" />
 
         <receiver
+            android:name=".NursingSessionReminderAlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".NursingSessionReminderActionReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".AppUpdateActionReceiver"
             android:exported="false" />
 
