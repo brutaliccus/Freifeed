@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ActiveFeedDraft } from '../lib/activeFeedSession'
 import {
   areFeedNotificationsEnabled,
@@ -21,6 +21,10 @@ import {
   syncNativeFeedWatch,
 } from '../lib/nativeNotifications'
 import { usesNativeNotifications } from '../lib/notificationPlatform'
+import {
+  getNursingSessionReminderEnabled,
+  subscribeNursingSessionReminderSettings,
+} from '../lib/nursingSessionReminderSettings'
 import type { Baby, BabyId, Feeding } from '../types'
 
 interface UseFeedNotificationsOptions {
@@ -65,6 +69,8 @@ export function useFeedNotifications({
 }: UseFeedNotificationsOptions) {
   const permissionRef = useRef<NotificationPermission | 'unsupported' | 'pending'>('pending')
   const lastSignatureRef = useRef('')
+  /** Bumps when nursing-timer reminder setting changes so FeedWatch can stay armed. */
+  const [nursingReminderRev, setNursingReminderRev] = useState(0)
   const feedingsRef = useRef(feedings)
   const babiesRef = useRef(babies)
   const localSessionsRef = useRef(localSessions)
@@ -79,6 +85,12 @@ export function useFeedNotifications({
   onPartnerFeedUpdateRef.current = onPartnerFeedUpdate
   onPartnerFeedEndedRef.current = onPartnerFeedEnded
   onPartnerFeedStartedRef.current = onPartnerFeedStarted
+
+  useEffect(() => {
+    return subscribeNursingSessionReminderSettings(() => {
+      setNursingReminderRev((n) => n + 1)
+    })
+  }, [])
 
   const pushFeedSync = useCallback(async () => {
     if (permissionRef.current !== 'granted') return
@@ -111,8 +123,12 @@ export function useFeedNotifications({
 
   useEffect(() => {
     const native = usesNativeNotifications()
+    const liveFeedsOn = areFeedNotificationsEnabled()
+    // Still-nursing reminders need the background poller/FCM even when live
+    // "partner is nursing" chronometer alerts are turned off.
+    const partnerWatchNeeded = liveFeedsOn || getNursingSessionReminderEnabled()
 
-    if (!householdId || !enabled || !areFeedNotificationsEnabled()) {
+    if (!householdId || !enabled || !partnerWatchNeeded) {
       lastSignatureRef.current = ''
       if (native) void clearNativeFeedNotifications()
       else void syncFeedNotificationsToServiceWorker([])
@@ -145,6 +161,18 @@ export function useFeedNotifications({
         await syncNativeFeedWatch(householdId, payload, true)
       }
 
+      if (!liveFeedsOn) {
+        // Keep FeedWatch for nursing reminders only — no live chronometer UI.
+        if (native) {
+          lastSignatureRef.current = ''
+          await clearNativeFeedNotifications()
+        } else {
+          lastSignatureRef.current = signature
+          await syncFeedNotificationsToServiceWorker([])
+        }
+        return
+      }
+
       if (native) {
         if (signature !== lastSignatureRef.current) {
           lastSignatureRef.current = signature
@@ -174,7 +202,16 @@ export function useFeedNotifications({
       if (watchAuthInterval !== undefined) window.clearInterval(watchAuthInterval)
       if (tickInterval !== undefined) window.clearInterval(tickInterval)
     }
-  }, [householdId, feedings, babies, localSessions, enabled, refreshWatchAuth, pushFeedSync])
+  }, [
+    householdId,
+    feedings,
+    babies,
+    localSessions,
+    enabled,
+    refreshWatchAuth,
+    pushFeedSync,
+    nursingReminderRev,
+  ])
 
   useEffect(() => {
     if (!householdId || !enabled || !areFeedNotificationsEnabled()) return
@@ -195,8 +232,9 @@ export function useFeedNotifications({
 
   useEffect(() => {
     if (!usesNativeNotifications() || !householdId || !enabled) return
+    if (!areFeedNotificationsEnabled() && !getNursingSessionReminderEnabled()) return
     void bootstrapNativePartnerFeedWatch(householdId, feedings, babies, localSessions)
-  }, [householdId, enabled])
+  }, [householdId, enabled, nursingReminderRev])
 
   useEffect(() => {
     if (!usesNativeNotifications()) return

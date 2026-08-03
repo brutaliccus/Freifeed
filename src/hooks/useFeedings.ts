@@ -138,7 +138,16 @@ export function useFeedings(householdId: string | null) {
 
   const markPartnerFeedStarted = useCallback(
     (opts: { babyId: BabyId; feedingId: string; startAtMs: number; side?: string | null }) => {
-      setFeedings((prev) => applyPartnerFeedStarted(prev, opts))
+      setFeedings((prev) => {
+        const next = applyPartnerFeedStarted(prev, opts)
+        const placeholder = next.find((f) => f.id === opts.feedingId)
+        // Persist across snapshot/refresh so partner start isn't dropped before
+        // the Firestore doc arrives (same pattern as local optimistic creates).
+        if (placeholder && !placeholder.endAt) {
+          optimisticRef.current.set(opts.feedingId, placeholder)
+        }
+        return next
+      })
     },
     [],
   )

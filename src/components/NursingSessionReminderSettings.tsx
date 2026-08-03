@@ -18,6 +18,7 @@ import {
   setNursingSessionReminderEnabled,
   setNursingSessionReminderMinutes,
 } from '../lib/nursingSessionReminderSettings'
+import { registerNativePartnerPushToken } from '../lib/partnerPushRegistration'
 import type { Baby, Feeding } from '../types'
 
 interface NursingSessionReminderSettingsProps {
@@ -44,10 +45,17 @@ export function NursingSessionReminderSettings({
         else await syncNursingSessionRemindersToServiceWorker(null)
         return
       }
-      const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+      const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
+        ownedOnly: native,
+      })
       const next = { ...payload, enabled: true }
-      if (native) await syncNativeNursingSessionReminders(next)
-      else await syncNursingSessionRemindersToServiceWorker(next)
+      if (native) {
+        await syncNativeNursingSessionReminders(next)
+        // Partner starts arm via FCM — register even if live feed alerts are off.
+        void registerNativePartnerPushToken()
+      } else {
+        await syncNursingSessionRemindersToServiceWorker(next)
+      }
     })()
   }
 

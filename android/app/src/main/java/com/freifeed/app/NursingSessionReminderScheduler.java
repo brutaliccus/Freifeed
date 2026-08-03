@@ -184,8 +184,10 @@ public final class NursingSessionReminderScheduler {
             "Nursing timer is still running" + sideSuffix + ". Open Freifeed to stop the session.";
         String medicineId = "nursing:" + sessionKey;
 
+        // shouldAlert is a "already delivered" guard — skip reschedule only.
+        // Do not mark the nursing session alerted here; that permanently
+        // suppresses the reminder if the medicine store was stale.
         if (!MedicineAlertStateStore.shouldAlert(app, medicineId, fireAt)) {
-            NursingSessionReminderState.markAlerted(app, sessionKey);
             return;
         }
 

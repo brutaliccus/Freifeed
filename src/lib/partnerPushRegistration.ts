@@ -2,15 +2,17 @@ import { auth } from '../firebase'
 import { apiRegisterPushToken } from './api'
 import { areFeedNotificationsEnabled } from './feedNotifications'
 import { FeedWatchNative } from './feedWatchNative'
+import { getNursingSessionReminderEnabled } from './nursingSessionReminderSettings'
 import { isAndroidNative } from './platform'
 
 /**
  * Register this device's FCM token with Firestore (partner feed push).
- * Call after sign-in and whenever feed notifications are enabled.
+ * Needed for live nursing alerts and/or still-nursing timer reminders when a
+ * partner starts a session with this app closed.
  */
 export async function registerNativePartnerPushToken(): Promise<void> {
   if (!isAndroidNative() || !auth.currentUser) return
-  if (!areFeedNotificationsEnabled()) return
+  if (!areFeedNotificationsEnabled() && !getNursingSessionReminderEnabled()) return
 
   const idToken = await auth.currentUser.getIdToken(true)
 

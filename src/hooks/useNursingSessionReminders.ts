@@ -53,13 +53,20 @@ export function useNursingSessionReminders({
       return
     }
 
-    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+    // Android: partner sessions are armed by FCM/FeedWatch. Only schedule owned
+    // sessions from JS so we never adopt (then cancel) partner alarm ids.
+    const ownedOnly = native
+    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
+      ownedOnly,
+    })
 
     const activeKeys = new Set(payload.sessions.map((s) => s.sessionKey))
     pruneNursingSessionReminderAlerts(activeKeys)
 
     // Rebuild after prune so alertedKeys stays accurate for the native scheduler.
-    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
+      ownedOnly,
+    })
     const sig = payloadSignature(next)
     if (sig === lastSigRef.current) return
     lastSigRef.current = sig
