@@ -85,9 +85,9 @@ export function FeedReminderSettings({ feedings, babies, localSessions }: FeedRe
         const perm = await requestPermission()
         if (perm !== 'granted') return
       }
-      setEnabled(next)
       setFeedReminderEnabled(next)
       await pushToServiceWorker(next)
+      setEnabled(next)
     } finally {
       setBusy(false)
     }

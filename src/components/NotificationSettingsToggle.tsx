@@ -22,6 +22,8 @@ export function NotificationSettingsToggle({
   iconOn,
   iconOff,
 }: NotificationSettingsToggleProps) {
+  // Busy copy assumes `enabled` is still the pre-toggle value (callers must not
+  // flip it until the async work finishes).
   const label = busy ? (enabled ? 'Turning off…' : 'Turning on…') : enabled ? onLabel : offLabel
 
   return (
@@ -31,6 +33,7 @@ export function NotificationSettingsToggle({
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy}
+      aria-pressed={enabled}
     >
       {busy ? (
         <Loader2 size={18} className="notification-settings-btn__spinner" aria-hidden />

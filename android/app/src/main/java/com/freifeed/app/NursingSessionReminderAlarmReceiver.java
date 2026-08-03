@@ -25,6 +25,9 @@ public class NursingSessionReminderAlarmReceiver extends BroadcastReceiver {
         String sessionKey = intent.getStringExtra(EXTRA_SESSION_KEY);
 
         NursingSessionReminderNotifier.show(context, id, title, body, sessionKey, true);
+        if (sessionKey != null && !sessionKey.isEmpty()) {
+            NursingSessionReminderState.markAlerted(context, sessionKey);
+        }
         NursingSessionReminderPlugin.dispatchShown(context, sessionKey);
     }
 }

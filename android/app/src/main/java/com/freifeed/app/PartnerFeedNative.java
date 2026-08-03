@@ -27,6 +27,16 @@ public final class PartnerFeedNative {
             return;
         }
 
+        // Still-nursing threshold reminder — independent of live timer alert state.
+        NursingSessionReminderScheduler.onPartnerSessionStarted(
+            context,
+            babyId,
+            babyName,
+            startAtIso,
+            side,
+            startMs
+        );
+
         String sessionKey = babyId + ":" + normalizeStartSecond(startAtIso, startMs);
         if (FeedAlertStateStore.hasAlerted(context, sessionKey)) return;
 
@@ -65,6 +75,7 @@ public final class PartnerFeedNative {
         FeedProgressNotifier.dismiss(context, notifId);
         FeedAlertStateStore.removeAlerted(context, sessionKey);
         FeedAlertStateStore.clearBabySessions(context, babyId);
+        NursingSessionReminderScheduler.onSessionEnded(context, babyId, startAtIso, startMs);
 
         String title = (babyName != null && !babyName.isEmpty() ? babyName : "Baby") + " — session ended";
         FeedProgressNotifier.showSessionEnded(context, notifId, title, "Feeding finished", babyId);

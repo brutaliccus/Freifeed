@@ -819,7 +819,8 @@ export async function syncNativeNursingSessionReminders(
   if (!isAndroidNative()) return
   await cancelLegacyNursingLocalNotifications()
 
-  if (!payload?.enabled || payload.sessions.length === 0) {
+  // Disabled / cleared: tear down everything.
+  if (!payload?.enabled) {
     try {
       await NursingSessionReminderNative.cancelAll()
     } catch {
@@ -830,12 +831,16 @@ export async function syncNativeNursingSessionReminders(
 
   if (!(await ensureNativeNotificationPermission())) return
 
+  // Always sync config + sessions (including empty). Native keeps partner-only
+  // FCM/poller alarms when the web list is briefly empty.
   try {
     await NursingSessionReminderNative.syncReminders({ json: JSON.stringify(payload) })
     return
   } catch (err) {
     console.warn('NursingSessionReminder plugin unavailable; using LocalNotifications fallback', err)
   }
+
+  if (payload.sessions.length === 0) return
 
   // Fallback for APKs that predate the AlarmManager plugin.
   const now = Date.now()

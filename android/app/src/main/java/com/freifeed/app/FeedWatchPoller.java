@@ -134,6 +134,9 @@ public final class FeedWatchPoller {
         }
 
         dismissInactiveBabyNotifications(context, activeBabyIds);
+
+        // Partner (and any remote) still-nursing reminders — web may be frozen/closed.
+        NursingSessionReminderScheduler.syncFromRemoteFeedings(context, feedings);
     }
 
     private static void dismissInactiveBabyNotifications(Context context, Set<String> activeBabyIds) {

@@ -53,18 +53,23 @@ export function useNursingSessionReminders({
       return
     }
 
-    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+    const ownedOnly = native
+    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
+      ownedOnly,
+    })
 
     const activeKeys = new Set(payload.sessions.map((s) => s.sessionKey))
     pruneNursingSessionReminderAlerts(activeKeys)
 
     // Rebuild after prune so alertedKeys stays accurate for the native scheduler.
-    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
+      ownedOnly,
+    })
     const sig = payloadSignature(next)
     if (sig === lastSigRef.current) return
     lastSigRef.current = sig
 
-    if (!next.enabled || next.sessions.length === 0) {
+    if (!next.enabled) {
       if (native) void syncNativeNursingSessionReminders(null)
       else void syncNursingSessionRemindersToServiceWorker(null)
       return
@@ -80,8 +85,12 @@ export function useNursingSessionReminders({
       return
     }
 
+    // Sync even when sessions is empty so native can drop ended web-tracked
+    // sessions without wiping partner-only FCM/poller alarms.
     if (native) {
       await syncNativeNursingSessionReminders(next)
+    } else if (next.sessions.length === 0) {
+      await syncNursingSessionRemindersToServiceWorker(null)
     } else {
       await syncNursingSessionRemindersToServiceWorker(next)
     }

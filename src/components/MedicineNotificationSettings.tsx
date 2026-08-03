@@ -27,9 +27,9 @@ export function MedicineNotificationSettings({ onEnabledChange }: MedicineNotifi
         const perm = await requestPermission()
         if (perm !== 'granted') return
       }
-      setEnabled(next)
       setMedicineNotificationsEnabled(next)
       onEnabledChange(next)
+      setEnabled(next)
     } finally {
       setBusy(false)
     }

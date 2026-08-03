@@ -28,12 +28,12 @@ export function FeedNotificationSettings({ onEnabledChange }: FeedNotificationSe
         const perm = await requestPermission()
         if (perm !== 'granted') return
       }
-      setEnabled(next)
       setFeedNotificationsEnabled(next)
       onEnabledChange(next)
       if (next && native) {
         await registerNativePartnerPushToken()
       }
+      setEnabled(next)
     } finally {
       setBusy(false)
     }
