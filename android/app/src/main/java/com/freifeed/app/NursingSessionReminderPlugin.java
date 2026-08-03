@@ -9,8 +9,6 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import java.util.HashSet;
-
 /** Capacitor bridge for "nursing timer still running" AlarmManager reminders. */
 @CapacitorPlugin(name = "NursingSessionReminder")
 public class NursingSessionReminderPlugin extends Plugin {
@@ -46,7 +44,6 @@ public class NursingSessionReminderPlugin extends Plugin {
     @PluginMethod
     public void cancelAll(PluginCall call) {
         NursingSessionReminderState.saveConfig(getContext(), false, 0L);
-        NursingSessionReminderState.saveWebSessionKeys(getContext(), new HashSet<>());
         NursingSessionReminderScheduler.cancelAll(getContext());
         call.resolve();
     }

@@ -65,12 +65,15 @@ const MILK_EXPIRY_ID_SPAN = 8_000
 const FEED_ID_BASE = 31_000
 const REMINDER_ID_BASE = 32_000
 const NURSING_LONG_ID_BASE = 34_000
+const NURSING_LONG_ID_SPAN = 100
 /** Legacy Capacitor LocalNotifications span (cancelled on sync). */
 const NURSING_LONG_LEGACY_SPAN = 8_000
 
 let channelsReady = false
 let medicineActionsReady = false
 let lastRegisteredSnoozeMinutes = -1
+/** Ids last scheduled via MedicineAlert (appointment-style), so we can cancel precisely. */
+let lastNursingScheduledIds: number[] = []
 
 function stableId(seed: string): number {
   let h = 0
@@ -78,6 +81,18 @@ function stableId(seed: string): number {
     h = (h * 31 + seed.charCodeAt(i)) | 0
   }
   return Math.abs(h) % 8_000
+}
+
+function nursingAlertKey(sessionKey: string): string {
+  return `nursing:${sessionKey}`
+}
+
+function nursingNotifId(sessionKey: string): number {
+  let h = 0
+  for (let i = 0; i < sessionKey.length; i++) {
+    h = (h * 31 + sessionKey.charCodeAt(i)) | 0
+  }
+  return NURSING_LONG_ID_BASE + (Math.abs(h) % NURSING_LONG_ID_SPAN)
 }
 
 async function ensureNativeNotificationSetup(): Promise<void> {
@@ -759,13 +774,22 @@ export function registerNativeNotificationListeners(handlers: NativeNotification
       return
     }
     if (event.medicineId.startsWith('apt:')) return
+    if (event.medicineId.startsWith('nursing:')) {
+      markNursingSessionReminderAlerted(event.medicineId.slice('nursing:'.length))
+      return
+    }
     markMedicineAlertFired(event.medicineId, event.dueMs)
   }).then((h) => {
     unsub.push(() => h.remove())
   })
 
   void MedicineAlertNative.addListener('medicineAlertActionPerformed', (event) => {
-    if (!event.medicineId || event.medicineId.startsWith('milk:') || event.medicineId.startsWith('apt:')) {
+    if (
+      !event.medicineId ||
+      event.medicineId.startsWith('milk:') ||
+      event.medicineId.startsWith('apt:') ||
+      event.medicineId.startsWith('nursing:')
+    ) {
       return
     }
     clearMedicineAlertFired(event.medicineId)
@@ -809,9 +833,9 @@ async function cancelLegacyNursingLocalNotifications(): Promise<void> {
 }
 
 /**
- * Schedule nursing-timer-still-running reminders via native AlarmManager
- * (survives app closed/idle). Falls back to LocalNotifications if the plugin
- * is missing (older APK).
+ * Schedule nursing-timer-still-running reminders the same way as appointments:
+ * JS computes atMs → MedicineAlertNative.scheduleAlarms → AlarmManager fires
+ * with the app closed. Config is also synced for partner FCM/poller.
  */
 export async function syncNativeNursingSessionReminders(
   payload: NursingSessionReminderSyncPayload | null,
@@ -819,59 +843,99 @@ export async function syncNativeNursingSessionReminders(
   if (!isAndroidNative()) return
   await cancelLegacyNursingLocalNotifications()
 
-  // Disabled / cleared: tear down everything.
-  if (!payload?.enabled) {
+  const cancelPrevious = async () => {
+    if (lastNursingScheduledIds.length > 0) {
+      try {
+        await MedicineAlertNative.cancelScheduledIds({ ids: lastNursingScheduledIds })
+      } catch {
+        /* plugin unavailable */
+      }
+      lastNursingScheduledIds = []
+    }
+    try {
+      await MedicineAlertNative.cancelScheduledInRange({
+        baseId: NURSING_LONG_ID_BASE,
+        count: NURSING_LONG_ID_SPAN,
+      })
+      await MedicineAlertNative.dismissDeliveredInRange({
+        baseId: NURSING_LONG_ID_BASE,
+        count: NURSING_LONG_ID_SPAN,
+      })
+    } catch {
+      /* ignore */
+    }
     try {
       await NursingSessionReminderNative.cancelAll()
     } catch {
-      /* plugin unavailable on older APKs */
+      /* older APK / unavailable */
+    }
+  }
+
+  if (!payload?.enabled) {
+    await cancelPrevious()
+    try {
+      await NursingSessionReminderNative.syncReminders({ json: 'null' })
+    } catch {
+      /* ignore */
     }
     return
   }
 
   if (!(await ensureNativeNotificationPermission())) return
 
-  // Always sync config + sessions (including empty). Native keeps partner-only
-  // FCM/poller alarms when the web list is briefly empty.
+  // Persist enabled + threshold for partner FCM/poller (app may be closed).
   try {
-    await NursingSessionReminderNative.syncReminders({ json: JSON.stringify(payload) })
-    return
-  } catch (err) {
-    console.warn('NursingSessionReminder plugin unavailable; using LocalNotifications fallback', err)
+    await NursingSessionReminderNative.syncReminders({
+      json: JSON.stringify({
+        enabled: true,
+        thresholdMs: payload.thresholdMs,
+        sessions: [],
+        alertedKeys: payload.alertedKeys,
+      }),
+    })
+  } catch {
+    /* plugin unavailable — MedicineAlert path below still works for this device's sessions */
   }
 
-  if (payload.sessions.length === 0) return
+  // Cancel only alarms this web session previously scheduled (appointment pattern).
+  // Do NOT cancel the whole nursing id range — partner FCM/poller alarms share it.
+  if (lastNursingScheduledIds.length > 0) {
+    try {
+      await MedicineAlertNative.cancelScheduledIds({ ids: lastNursingScheduledIds })
+    } catch {
+      /* ignore */
+    }
+  }
 
-  // Fallback for APKs that predate the AlarmManager plugin.
   const now = Date.now()
-  const schedule: {
-    id: number
-    title: string
-    body: string
-    schedule: { at: Date }
-    channelId: string
-  }[] = []
+  const toSchedule: MedicineAlertScheduleItem[] = []
 
   for (const session of payload.sessions) {
     if (payload.alertedKeys.includes(session.sessionKey)) continue
     const startMs = new Date(session.startAtIso).getTime()
     if (Number.isNaN(startMs)) continue
-    const fireAt = startMs + payload.thresholdMs
-    const at = fireAt <= now ? new Date(now + 2_000) : new Date(fireAt)
+    let fireAt = startMs + payload.thresholdMs
+    // Same as feed reminders: schedule a near-term alarm if already overdue.
+    if (fireAt <= now) fireAt = now + 500
     const side = session.side ? ` · ${session.side}` : ''
-    schedule.push({
-      id: NURSING_LONG_ID_BASE + (stableId(session.sessionKey) % 100),
+    toSchedule.push({
+      id: nursingNotifId(session.sessionKey),
+      atMs: fireAt,
       title: `${session.babyName} — still nursing?`,
       body: `Nursing timer is still running${side}. Open Freifeed to stop the session.`,
-      schedule: { at },
-      channelId: REMINDER_CHANNEL,
+      medicineId: nursingAlertKey(session.sessionKey),
+      dueMs: fireAt,
     })
-    if (fireAt <= now) {
-      markNursingSessionReminderAlerted(session.sessionKey)
-    }
   }
 
-  if (schedule.length > 0) {
-    await LocalNotifications.schedule({ notifications: schedule })
+  lastNursingScheduledIds = toSchedule.map((item) => item.id)
+
+  if (toSchedule.length > 0) {
+    try {
+      await MedicineAlertNative.scheduleAlarms({ items: toSchedule })
+    } catch (err) {
+      console.warn('MedicineAlert scheduleAlarms failed for nursing reminders', err)
+      lastNursingScheduledIds = []
+    }
   }
 }

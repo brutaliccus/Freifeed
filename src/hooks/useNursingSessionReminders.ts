@@ -53,18 +53,13 @@ export function useNursingSessionReminders({
       return
     }
 
-    const ownedOnly = native
-    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
-      ownedOnly,
-    })
+    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
 
     const activeKeys = new Set(payload.sessions.map((s) => s.sessionKey))
     pruneNursingSessionReminderAlerts(activeKeys)
 
     // Rebuild after prune so alertedKeys stays accurate for the native scheduler.
-    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
-      ownedOnly,
-    })
+    const next = buildNursingSessionReminderPayload(feedings, babies, localSessions)
     const sig = payloadSignature(next)
     if (sig === lastSigRef.current) return
     lastSigRef.current = sig

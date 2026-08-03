@@ -37,6 +37,10 @@ public final class MedicineAlertNotifier {
         return medicineId != null && medicineId.startsWith("apt:");
     }
 
+    private static boolean isNursingAlert(String medicineId) {
+        return medicineId != null && medicineId.startsWith("nursing:");
+    }
+
     /** Title prefix fallback for alarms scheduled before apt: ids were used. */
     private static boolean isAppointmentOrReminderTitle(String title) {
         if (title == null) return false;
@@ -49,7 +53,9 @@ public final class MedicineAlertNotifier {
     }
 
     private static boolean skipTakenAction(String medicineId, String title) {
-        return isMilkAlert(medicineId) || isAppointmentOrReminderAlert(medicineId, title);
+        return isMilkAlert(medicineId)
+            || isNursingAlert(medicineId)
+            || isAppointmentOrReminderAlert(medicineId, title);
     }
 
     public static void ensureChannel(Context context) {
@@ -82,6 +88,7 @@ public final class MedicineAlertNotifier {
         long dueMs
     ) {
         boolean milk = isMilkAlert(medicineId);
+        boolean nursing = isNursingAlert(medicineId);
         boolean appointment = isAppointmentOrReminderAlert(medicineId, title);
         if (milk) {
             ensureMilkChannel(context);
@@ -99,6 +106,12 @@ public final class MedicineAlertNotifier {
             }
             MedicineAlertStateStore.markFired(context, medicineId, dueMs);
             MedicineAlertPlugin.dispatchAlertShown(context, medicineId, dueMs);
+            if (isNursingAlert(medicineId)) {
+                NursingSessionReminderState.markAlerted(
+                    context,
+                    medicineId.substring("nursing:".length())
+                );
+            }
         }
 
         int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -109,7 +122,13 @@ public final class MedicineAlertNotifier {
         Intent openIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (openIntent != null) {
             openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            String url = milk ? "/?view=milk" : appointment ? "/?view=notes" : "/?view=medicines";
+            String url = milk
+                ? "/?view=milk"
+                : appointment
+                    ? "/?view=notes"
+                    : nursing
+                        ? "/"
+                        : "/?view=medicines";
             openIntent.putExtra("url", url);
         }
         PendingIntent contentPending =

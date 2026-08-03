@@ -43,9 +43,7 @@ export function NursingSessionReminderSettings({
       else await syncNursingSessionRemindersToServiceWorker(null)
       return
     }
-    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions, {
-      ownedOnly: native,
-    })
+    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
     const next = { ...payload, enabled: true }
     if (native) await syncNativeNursingSessionReminders(next)
     else await syncNursingSessionRemindersToServiceWorker(next)
@@ -84,7 +82,7 @@ export function NursingSessionReminderSettings({
       <h2>Nursing timer reminder</h2>
       <p className="muted">
         {native
-          ? 'Uses Android system alarms so you still get notified if Freifeed is closed or idle — including when your partner started the session.'
+          ? 'Uses the same Android alarms as appointments — works with Freifeed closed, including when your partner started the session.'
           : 'Get a notification when a nursing session has been running longer than the time you set — yours or your partner\'s.'}
       </p>
 

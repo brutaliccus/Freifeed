@@ -1,7 +1,6 @@
 import { isAndroidNative } from './platform'
 import { isSessionInProgress, sessionElapsedSeconds, type ActiveFeedDraft } from './activeFeedSession'
 import { normalizeFeedStartIso } from './feedNotifications'
-import { isFeedingOwnedByThisDevice } from './feedOwnership'
 import {
   getNursingSessionReminderEnabled,
   getNursingSessionReminderThresholdMs,
@@ -38,21 +37,13 @@ export function buildNursingSessionReminderPayload(
   feedings: Feeding[],
   babies: Baby[],
   localSessions: ActiveFeedDraft[],
-  /**
-   * On Android, partner sessions are armed natively via FCM/FeedWatch.
-   * Web sync should only track this device's sessions so a brief empty list
-   * cannot cancel partner alarms.
-   */
-  opts: { ownedOnly?: boolean } = {},
 ): NursingSessionReminderSyncPayload {
   const enabled = getNursingSessionReminderEnabled()
   const thresholdMs = getNursingSessionReminderThresholdMs()
   const items: NursingSessionReminderItem[] = []
   const seen = new Set<string>()
-  const ownedOnly = opts.ownedOnly === true
 
   for (const f of nursingOnlyInProgress(feedings)) {
-    if (ownedOnly && !isFeedingOwnedByThisDevice(f.id)) continue
     const start = timestampToDate(f.startAt)
     if (!start) continue
     const baby = resolveBaby(babies, f.babyId)
