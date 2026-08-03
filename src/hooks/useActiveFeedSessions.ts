@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
-import { createFeeding, updateFeeding, type FeedingInput } from '../lib/feedings'
+import { type FeedingInput } from '../lib/feedings'
+import {
+  createFeedingOptimistic,
+  updateFeedingOptimistic,
+  deleteFeedingOptimistic,
+} from '../lib/feedingMutations'
 import {
   createEmptyDraft,
   defaultBabyForNewSession,
@@ -37,8 +42,6 @@ function draftToInput(d: ActiveFeedDraft): FeedingInput {
   const bottleTime = d.startTime || nowTime
   const bottleAt = combineDateAndTime(defaultDate, bottleTime)
 
-  // Pump sessions can save without explicit start/end times — default to now
-  // so the entry still anchors on the timeline + milk storage.
   const pumpStartTime = d.kind === 'pump' ? d.startTime || nowTime : d.startTime
   const pumpEndTime = d.kind === 'pump' ? d.endTime || nowTime : d.endTime
   const startTime = d.kind === 'pump' ? pumpStartTime : d.startTime
@@ -67,17 +70,27 @@ function draftToInput(d: ActiveFeedDraft): FeedingInput {
   }
 }
 
+export type FeedingOptimisticOps = {
+  upsert: (feeding: Feeding) => void
+  patch: (feedingId: string, input: FeedingInput) => void
+  remove: (feedingId: string) => void
+}
+
 export function useActiveFeedSessions(
   householdId: string | null,
   babyIds: BabyId[],
   feedings: Feeding[],
   onFeedingsChanged: () => void,
   onMilkChanged?: () => void,
+  optimistic?: FeedingOptimisticOps | null,
 ) {
   const [sessions, setSessionsState] = useState<ActiveFeedDraft[]>(() => loadActiveFeedSessions())
-  const [syncingId, setSyncingId] = useState<string | null>(null)
+  /** Kept for API compat — no longer gates UI on network. */
+  const [syncingId] = useState<string | null>(null)
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
+  const optimisticRef = useRef(optimistic)
+  optimisticRef.current = optimistic
 
   const persist = useCallback((next: ActiveFeedDraft[] | ((prev: ActiveFeedDraft[]) => ActiveFeedDraft[])) => {
     setSessionsState((prev) => {
@@ -188,15 +201,15 @@ export function useActiveFeedSessions(
 
   const buildInput = useCallback((d: ActiveFeedDraft): FeedingInput => draftToInput(d), [])
 
-  const pushStopToServer = useCallback(
-    async (current: ActiveFeedDraft, endStr: string) => {
+  const pushStopBackground = useCallback(
+    (current: ActiveFeedDraft, endStr: string) => {
       if (!householdId || !current.feedingId) return
       const defaultDate = parseDayLocal(current.defaultDate)
       const side = sidesToNursingSide(current.sides) ?? current.side
       const startAt =
         combineDateAndTime(defaultDate, current.startTime) ??
         (current.timerStartedAt ? new Date(current.timerStartedAt) : null)
-      await updateFeeding(householdId, current.feedingId, {
+      const input: FeedingInput = {
         type: current.kind,
         babyId: current.babyId,
         side,
@@ -208,15 +221,17 @@ export function useActiveFeedSessions(
         weightLb: null,
         weightOz: null,
         note: current.note.trim() || null,
+      }
+      updateFeedingOptimistic(householdId, current.feedingId, input, {
+        onOptimistic: () => optimisticRef.current?.patch(current.feedingId!, input),
       })
-      onFeedingsChanged()
     },
-    [householdId, onFeedingsChanged],
+    [householdId],
   )
 
   const startTimer = useCallback(
-    async (sessionId: string) => {
-      const current = sessions.find((s) => s.sessionId === sessionId)
+    (sessionId: string) => {
+      const current = sessionsRef.current.find((s) => s.sessionId === sessionId)
       if (!current || !householdId || current.kind === 'bottle') return
       const now = new Date()
       const presetStart = current.startTime?.trim()
@@ -226,47 +241,45 @@ export function useActiveFeedSessions(
           )
         : null
       const startAt = presetStart ?? now
-      setSyncingId(sessionId)
-      try {
-        const draft = {
-          ...current,
-          startTime: format(startAt, 'HH:mm'),
-          endTime: '',
-          defaultDate: format(startAt, 'yyyy-MM-dd'),
-          timerStartedAt: startAt.toISOString(),
-          storedDate: current.kind === 'pump' ? format(startAt, 'yyyy-MM-dd') : current.storedDate,
-        }
-        const input = draftToInput(draft)
-        input.startAt = startAt
-        input.endAt = null
-        input.volumeOz = null
-        input.milkStorage = current.kind === 'pump' ? current.milkStorage : null
-
-        let feedingId = current.feedingId
-        if (feedingId) {
-          await updateFeeding(householdId, feedingId, input)
-        } else {
-          feedingId = await createFeeding(householdId, input)
-        }
-
-        patchSession(sessionId, {
-          startTime: format(startAt, 'HH:mm'),
-          endTime: '',
-          defaultDate: format(startAt, 'yyyy-MM-dd'),
-          timerStartedAt: startAt.toISOString(),
-          timerAccumulatedSec: 0,
-          timerPaused: false,
-          feedingId,
-          awaitingVolume: false,
-          storedDate: draft.storedDate,
-        })
-        markFeedingOwnedByThisDevice(feedingId)
-        onFeedingsChanged()
-      } finally {
-        setSyncingId(null)
+      const draft = {
+        ...current,
+        startTime: format(startAt, 'HH:mm'),
+        endTime: '',
+        defaultDate: format(startAt, 'yyyy-MM-dd'),
+        timerStartedAt: startAt.toISOString(),
+        storedDate: current.kind === 'pump' ? format(startAt, 'yyyy-MM-dd') : current.storedDate,
       }
+      const input = draftToInput(draft)
+      input.startAt = startAt
+      input.endAt = null
+      input.volumeOz = null
+      input.milkStorage = current.kind === 'pump' ? current.milkStorage : null
+
+      let feedingId = current.feedingId
+      if (feedingId) {
+        updateFeedingOptimistic(householdId, feedingId, input, {
+          onOptimistic: () => optimisticRef.current?.patch(feedingId!, input),
+        })
+      } else {
+        feedingId = createFeedingOptimistic(householdId, input, {
+          onOptimistic: (feeding) => optimisticRef.current?.upsert(feeding),
+        })
+      }
+
+      patchSession(sessionId, {
+        startTime: format(startAt, 'HH:mm'),
+        endTime: '',
+        defaultDate: format(startAt, 'yyyy-MM-dd'),
+        timerStartedAt: startAt.toISOString(),
+        timerAccumulatedSec: 0,
+        timerPaused: false,
+        feedingId,
+        awaitingVolume: false,
+        storedDate: draft.storedDate,
+      })
+      markFeedingOwnedByThisDevice(feedingId)
     },
-    [sessions, householdId, patchSession, onFeedingsChanged],
+    [householdId, patchSession],
   )
 
   const pauseTimer = useCallback(
@@ -296,33 +309,27 @@ export function useActiveFeedSessions(
   )
 
   const stopTimer = useCallback(
-    async (sessionId: string, endTimeOverride?: string) => {
-      const current = sessions.find((s) => s.sessionId === sessionId)
+    (sessionId: string, endTimeOverride?: string) => {
+      const current = sessionsRef.current.find((s) => s.sessionId === sessionId)
       if (!current || !householdId) return
       const endStr = endTimeOverride?.trim() || current.endTime?.trim() || format(new Date(), 'HH:mm')
-      setSyncingId(sessionId)
-      try {
-        const awaitingVolume = current.kind === 'pump'
-        patchSession(sessionId, {
-          endTime: endStr,
-          timerStartedAt: null,
-          timerPaused: false,
-          awaitingVolume,
-        })
-
-        if (current.feedingId) {
-          await pushStopToServer({ ...current, endTime: endStr }, endStr)
-        }
-      } finally {
-        setSyncingId(null)
+      const awaitingVolume = current.kind === 'pump'
+      patchSession(sessionId, {
+        endTime: endStr,
+        timerStartedAt: null,
+        timerPaused: false,
+        awaitingVolume,
+      })
+      if (current.feedingId) {
+        pushStopBackground({ ...current, endTime: endStr }, endStr)
       }
     },
-    [sessions, householdId, patchSession, pushStopToServer],
+    [householdId, patchSession, pushStopBackground],
   )
 
   const syncEndTime = useCallback(
-    async (sessionId: string, endTime: string) => {
-      const current = sessions.find((s) => s.sessionId === sessionId)
+    (sessionId: string, endTime: string) => {
+      const current = sessionsRef.current.find((s) => s.sessionId === sessionId)
       if (!current || !householdId || current.kind === 'bottle' || !endTime.trim()) return
       if (!current.feedingId && !current.timerStartedAt && !current.startTime) return
 
@@ -335,68 +342,91 @@ export function useActiveFeedSessions(
       })
 
       if (current.feedingId) {
-        setSyncingId(sessionId)
-        try {
-          await pushStopToServer({ ...current, endTime }, endTime)
-        } finally {
-          setSyncingId(null)
-        }
+        pushStopBackground({ ...current, endTime }, endTime)
       }
     },
-    [sessions, householdId, patchSession, pushStopToServer],
+    [householdId, patchSession, pushStopBackground],
   )
 
   const stopFeedingRecord = useCallback(
-    async (feeding: Feeding): Promise<ActiveFeedDraft | null> => {
+    (feeding: Feeding): ActiveFeedDraft | null => {
       if (!householdId || !feeding.startAt || feeding.endAt) return null
       const now = new Date()
       const endStr = format(now, 'HH:mm')
-      const existing = sessions.find((s) => s.feedingId === feeding.id)
+      const existing = sessionsRef.current.find((s) => s.feedingId === feeding.id)
       const draft = existing ?? feedingToDraft(householdId, feeding)
-      const syncKey = existing?.sessionId ?? feeding.id
+      const defaultDate = parseDayLocal(draft.defaultDate)
+      const startAt = timestampToDate(feeding.startAt)
+      const side = sidesToNursingSide(draft.sides) ?? feeding.side
+      const input: FeedingInput = {
+        type: feeding.type,
+        babyId: feeding.babyId,
+        side,
+        startAt: startAt ?? combineDateAndTime(defaultDate, draft.startTime)!,
+        endAt: combineDateAndTime(defaultDate, endStr) ?? now,
+        volumeOz: null,
+        milkStorage: feeding.type === 'pump' ? draft.milkStorage : null,
+        storedAt: pumpStoredAt({ ...draft, endTime: endStr }),
+        weightLb: null,
+        weightOz: null,
+        note: (existing?.note ?? feeding.note ?? '').trim() || null,
+      }
 
-      setSyncingId(syncKey)
-      try {
-        const defaultDate = parseDayLocal(draft.defaultDate)
-        const startAt = timestampToDate(feeding.startAt)
-        const side = sidesToNursingSide(draft.sides) ?? feeding.side
-        await updateFeeding(householdId, feeding.id, {
-          type: feeding.type,
-          babyId: feeding.babyId,
-          side,
-          startAt: startAt ?? combineDateAndTime(defaultDate, draft.startTime)!,
-          endAt: combineDateAndTime(defaultDate, endStr) ?? now,
-          volumeOz: null,
-          milkStorage: feeding.type === 'pump' ? draft.milkStorage : null,
-          storedAt: pumpStoredAt({ ...draft, endTime: endStr }),
-          weightLb: null,
-          weightOz: null,
-          note: (existing?.note ?? feeding.note ?? '').trim() || null,
+      const stopped: ActiveFeedDraft = {
+        ...draft,
+        feedingId: feeding.id,
+        endTime: endStr,
+        timerStartedAt: null,
+        timerPaused: false,
+        awaitingVolume: feeding.type === 'pump',
+      }
+      persist((prev) => {
+        const i = prev.findIndex(
+          (s) => s.sessionId === stopped.sessionId || s.feedingId === feeding.id,
+        )
+        if (i >= 0) return prev.map((s, j) => (j === i ? stopped : s))
+        return [...prev, stopped]
+      })
+      markFeedingOwnedByThisDevice(feeding.id)
+
+      updateFeedingOptimistic(householdId, feeding.id, input, {
+        onOptimistic: () => optimisticRef.current?.patch(feeding.id, input),
+      })
+      return stopped
+    },
+    [householdId, persist],
+  )
+
+  const saveDraftBackground = useCallback(
+    (draft: ActiveFeedDraft, input: FeedingInput) => {
+      if (!householdId) return
+      if (draft.feedingId) {
+        updateFeedingOptimistic(householdId, draft.feedingId, input, {
+          onOptimistic: () => optimisticRef.current?.patch(draft.feedingId!, input),
         })
-
-        const stopped: ActiveFeedDraft = {
-          ...draft,
-          feedingId: feeding.id,
-          endTime: endStr,
-          timerStartedAt: null,
-          timerPaused: false,
-          awaitingVolume: feeding.type === 'pump',
+      } else {
+        const feedingId = createFeedingOptimistic(householdId, input, {
+          onOptimistic: (feeding) => optimisticRef.current?.upsert(feeding),
+        })
+        if (draft.sessionId) {
+          patchSession(draft.sessionId, { feedingId })
         }
-        persist((prev) => {
-          const i = prev.findIndex(
-            (s) => s.sessionId === stopped.sessionId || s.feedingId === feeding.id,
-          )
-          if (i >= 0) return prev.map((s, j) => (j === i ? stopped : s))
-          return [...prev, stopped]
-        })
-        markFeedingOwnedByThisDevice(feeding.id)
-        onFeedingsChanged()
-        return stopped
-      } finally {
-        setSyncingId(null)
+        markFeedingOwnedByThisDevice(feedingId)
       }
     },
-    [sessions, householdId, persist, onFeedingsChanged],
+    [householdId, patchSession],
+  )
+
+  const discardDraftBackground = useCallback(
+    (draft: ActiveFeedDraft) => {
+      if (!householdId || !draft.feedingId) return
+      const id = draft.feedingId
+      deleteFeedingOptimistic(householdId, id, {
+        onOptimistic: () => optimisticRef.current?.remove(id),
+      })
+      clearFeedingOwnership(id)
+    },
+    [householdId],
   )
 
   const ensureSessionForFeeding = useCallback(
@@ -451,5 +481,7 @@ export function useActiveFeedSessions(
     syncEndTime,
     buildInput,
     notifySaved,
+    saveDraftBackground,
+    discardDraftBackground,
   }
 }

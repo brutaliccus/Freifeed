@@ -22,20 +22,20 @@ export function FeedNotificationSettings({ onEnabledChange }: FeedNotificationSe
   const toggle = async () => {
     if (busy) return
     const next = !enabled
-    setBusy(true)
-    try {
-      if (next) {
+    if (next) {
+      setBusy(true)
+      try {
         const perm = await requestPermission()
         if (perm !== 'granted') return
+      } finally {
+        setBusy(false)
       }
-      setFeedNotificationsEnabled(next)
-      onEnabledChange(next)
-      if (next && native) {
-        await registerNativePartnerPushToken()
-      }
-      setEnabled(next)
-    } finally {
-      setBusy(false)
+    }
+    setEnabled(next)
+    setFeedNotificationsEnabled(next)
+    onEnabledChange(next)
+    if (next && native) {
+      void registerNativePartnerPushToken()
     }
   }
 

@@ -5,9 +5,8 @@ import { DiaperKindTogglePicker } from './DiaperKindTogglePicker'
 import { FeedDateButton } from './FeedDateButton'
 import { TimePickerField } from './TimePickerField'
 import {
-  createDiaper,
-  deleteDiaper,
-  updateDiaper,
+  deleteDiaperBackground,
+  saveDiaperBackground,
   type DiaperInput,
 } from '../lib/diapers'
 import {
@@ -58,7 +57,6 @@ export function DiaperFormModal({
   })
   const [timeStr, setTimeStr] = useState(() => dateToTimeInputValue(openedAt))
   const [note, setNote] = useState(editing?.note ?? '')
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -84,40 +82,22 @@ export function DiaperFormModal({
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const input = buildInput()
     if (!input) return
-    setSaving(true)
     setError(null)
-    try {
-      if (editing) {
-        await updateDiaper(householdId, editing.id, input)
-      } else {
-        await createDiaper(householdId, input)
-      }
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save')
-    } finally {
-      setSaving(false)
-    }
+    saveDiaperBackground(householdId, editing?.id ?? null, input)
+    onSaved()
+    onClose()
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!editing) return
     if (!window.confirm('Delete this diaper entry?')) return
-    setSaving(true)
     setError(null)
-    try {
-      await deleteDiaper(householdId, editing.id)
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete')
-    } finally {
-      setSaving(false)
-    }
+    deleteDiaperBackground(householdId, editing.id)
+    onSaved()
+    onClose()
   }
 
   const canSave = togglesToDiaperKind(kindToggles) != null
@@ -155,20 +135,11 @@ export function DiaperFormModal({
             })}
           </div>
 
-          <DiaperKindTogglePicker
-            kinds={kindToggles}
-            onChange={setKindToggles}
-            disabled={saving}
-          />
+          <DiaperKindTogglePicker kinds={kindToggles} onChange={setKindToggles} />
 
           <div className="time-fields time-fields--inline-date">
-            <TimePickerField
-              label="Time"
-              value={timeStr}
-              onChange={setTimeStr}
-              disabled={saving}
-            />
-            <FeedDateButton value={dateStr} onChange={setDateStr} disabled={saving} />
+            <TimePickerField label="Time" value={timeStr} onChange={setTimeStr} />
+            <FeedDateButton value={dateStr} onChange={setDateStr} />
           </div>
 
           <label className="note-field">
@@ -180,7 +151,6 @@ export function DiaperFormModal({
               maxLength={200}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Optional"
-              disabled={saving}
             />
           </label>
 
@@ -191,16 +161,15 @@ export function DiaperFormModal({
           <button
             type="button"
             className="btn btn-primary btn--grow"
-            onClick={() => void handleSave()}
-            disabled={saving || !canSave}
+            onClick={handleSave}
+            disabled={!canSave}
           >
-            {saving ? 'Saving…' : editing ? 'Save' : 'Log'}
+            {editing ? 'Save' : 'Log'}
           </button>
           <button
             type="button"
             className="feed-discard-btn"
-            onClick={() => (editing ? void handleDelete() : onClose())}
-            disabled={saving}
+            onClick={() => (editing ? handleDelete() : onClose())}
             aria-label={editing ? 'Delete entry' : 'Discard'}
           >
             <Trash2 size={18} aria-hidden />

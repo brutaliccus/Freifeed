@@ -125,6 +125,9 @@ function App() {
     daysLoaded: feedingsDaysLoaded,
     markPartnerFeedEnded,
     markPartnerFeedStarted,
+    upsertOptimisticFeeding,
+    patchOptimisticFeeding,
+    removeOptimisticFeeding,
   } = useFeedings(householdId)
   const { babies, loading: babiesLoading, error: babiesError, refresh: refreshBabies } = useBabies(householdId)
   const { household, refresh: refreshHousehold } = useHousehold(householdId)
@@ -164,7 +167,18 @@ function App() {
     revertNoteOptimistic,
   } = useNotes(householdId)
   const allBabyIds = useMemo(() => babies.map((b) => b.id), [babies])
-  const feedSessions = useActiveFeedSessions(householdId, allBabyIds, feedings, refreshFeedings, refreshMilk)
+  const feedSessions = useActiveFeedSessions(
+    householdId,
+    allBabyIds,
+    feedings,
+    refreshFeedings,
+    refreshMilk,
+    {
+      upsert: upsertOptimisticFeeding,
+      patch: patchOptimisticFeeding,
+      remove: removeOptimisticFeeding,
+    },
+  )
   const [notificationsEnabled, setNotificationsEnabled] = useState(areFeedNotificationsEnabled)
   const [medicineNotificationsEnabled, setMedicineNotificationsEnabled] = useState(
     areMedicineNotificationsEnabled,
@@ -1102,8 +1116,7 @@ function App() {
           }}
           syncing={drawerSessionId ? feedSessions.syncingId === drawerSessionId : false}
           onStartTimer={() => {
-            if (!drawerSessionId) return Promise.resolve()
-            return feedSessions.startTimer(drawerSessionId).then(() => minimizeDrawer())
+            if (drawerSessionId) feedSessions.startTimer(drawerSessionId)
           }}
           onPauseTimer={() => {
             if (drawerSessionId) feedSessions.pauseTimer(drawerSessionId)
@@ -1115,8 +1128,13 @@ function App() {
             if (drawerSessionId) void feedSessions.syncEndTime(drawerSessionId, endTime)
           }}
           onStopForSave={(endTime) => {
-            if (drawerSessionId) return feedSessions.stopTimer(drawerSessionId, endTime)
-            return Promise.resolve()
+            if (drawerSessionId) feedSessions.stopTimer(drawerSessionId, endTime)
+          }}
+          onSaveBackground={(draft, input) => {
+            feedSessions.saveDraftBackground(draft, input)
+          }}
+          onDiscardBackground={(draft) => {
+            feedSessions.discardDraftBackground(draft)
           }}
           onMinimize={minimizeDrawer}
           onSaved={handleSaved}

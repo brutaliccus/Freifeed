@@ -17,7 +17,11 @@ import {
   type MedicineForPersonId,
 } from '../lib/medicineSubjects'
 import { useCountdown } from '../hooks/useCountdown'
-import { deleteMedicine, markMedicineTaken, setMedicineActive } from '../lib/medicines'
+import {
+  deleteMedicineBackground,
+  markMedicineTakenBackground,
+  setMedicineActiveBackground,
+} from '../lib/medicines'
 import {
   daysRemaining,
   describeFrequency,
@@ -127,20 +131,20 @@ export function MedicinesPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- watchTick refreshes prefs
   }, [tabSubjects, householdId, watchTick])
 
-  const handleDelete = async (medicine: Medicine) => {
+  const handleDelete = (medicine: Medicine) => {
     if (!window.confirm(`Delete "${medicine.name}"?`)) return
-    await deleteMedicine(householdId, medicine.id)
+    deleteMedicineBackground(householdId, medicine.id)
     onRefresh()
   }
 
-  const handleReactivate = async (medicine: Medicine) => {
+  const handleReactivate = (medicine: Medicine) => {
     const restart = medicine.durationDays != null
-    await setMedicineActive(householdId, medicine.id, true, restart)
+    setMedicineActiveBackground(householdId, medicine.id, true, restart)
     onRefresh()
   }
 
-  const handleMarkTaken = async (medicine: Medicine) => {
-    await markMedicineTaken(householdId, medicine.id, new Date())
+  const handleMarkTaken = (medicine: Medicine) => {
+    markMedicineTakenBackground(householdId, medicine.id, new Date())
     onRefresh()
   }
 

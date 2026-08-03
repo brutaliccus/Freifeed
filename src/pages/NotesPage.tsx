@@ -25,7 +25,11 @@ import {
   describeRecurrence,
   nextAppointmentOccurrence,
 } from '../lib/appointmentRecurrence'
-import { archiveNote, deleteNote, unarchiveNote } from '../lib/notes'
+import {
+  archiveNoteBackground,
+  deleteNoteBackground,
+  unarchiveNoteBackground,
+} from '../lib/notes'
 import {
   archivedOccurrenceDisplayAt,
   hasOlderArchivedNotes,
@@ -196,7 +200,6 @@ export function NotesPage({
   onRefresh,
   archiveNoteOptimistic,
   unarchiveNoteOptimistic,
-  revertNoteOptimistic,
 }: NotesPageProps) {
   const subjects = useMemo(
     () => buildNoteSubjects(babies, members, personNicknames),
@@ -210,7 +213,6 @@ export function NotesPage({
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<BabyNote | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
   const [watchRevision, setWatchRevision] = useState(0)
 
   useEffect(() => {
@@ -288,50 +290,30 @@ export function NotesPage({
     setEditingNote(null)
   }
 
-  const handleArchive = async (note: BabyNote, e?: React.MouseEvent) => {
+  const handleArchive = (note: BabyNote, e?: React.MouseEvent) => {
     e?.stopPropagation()
     archiveNoteOptimistic?.(note.id)
-    try {
-      await archiveNote(householdId, note.id)
-      onRefresh()
-    } catch {
-      revertNoteOptimistic?.(note.id)
-    }
+    archiveNoteBackground(householdId, note.id)
   }
 
-  const handleRestore = async (note: BabyNote, e?: React.MouseEvent) => {
+  const handleRestore = (note: BabyNote, e?: React.MouseEvent) => {
     e?.stopPropagation()
     unarchiveNoteOptimistic?.(note.id)
-    try {
-      await unarchiveNote(householdId, note.id, {
-        clearOccurrence: isOccurrenceArchiveEntry(note),
-      })
-      onRefresh()
-    } catch {
-      revertNoteOptimistic?.(note.id)
-    }
+    unarchiveNoteBackground(householdId, note.id, {
+      clearOccurrence: isOccurrenceArchiveEntry(note),
+    })
   }
 
-  const handleCheck = async (note: BabyNote) => {
+  const handleCheck = (note: BabyNote) => {
     archiveNoteOptimistic?.(note.id)
-    try {
-      await archiveNote(householdId, note.id)
-      onRefresh()
-    } catch {
-      revertNoteOptimistic?.(note.id)
-    }
+    archiveNoteBackground(householdId, note.id)
   }
 
-  const handleDelete = async (note: BabyNote, e?: React.MouseEvent) => {
+  const handleDelete = (note: BabyNote, e?: React.MouseEvent) => {
     e?.stopPropagation()
     if (!window.confirm('Delete this item permanently?')) return
-    setBusyId(note.id)
-    try {
-      await deleteNote(householdId, note.id, note)
-      onRefresh()
-    } finally {
-      setBusyId(null)
-    }
+    deleteNoteBackground(householdId, note.id, note)
+    onRefresh()
   }
 
   const openFromSearch = (note: BabyNote) => {
@@ -389,7 +371,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__edit"
           onClick={() => openEdit(note)}
-          disabled={busyId === note.id}
           aria-label="Edit"
         >
           <Pencil size={15} />
@@ -399,7 +380,6 @@ export function NotesPage({
         type="button"
         className="notes-line-item__restore"
         onClick={(e) => void handleRestore(note, e)}
-        disabled={busyId === note.id}
         aria-label="Move back to active"
       >
         <RotateCcw size={15} />
@@ -408,7 +388,6 @@ export function NotesPage({
         type="button"
         className="notes-line-item__delete"
         onClick={(e) => void handleDelete(note, e)}
-        disabled={busyId === note.id}
         aria-label="Delete"
       >
         <Trash2 size={16} />
@@ -487,7 +466,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__edit"
           onClick={() => openEdit(note)}
-          disabled={busyId === note.id}
           aria-label="Edit appointment"
         >
           <Pencil size={15} />
@@ -496,7 +474,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__delete"
           onClick={(e) => void handleDelete(note, e)}
-          disabled={busyId === note.id}
           aria-label="Delete appointment"
         >
           <Trash2 size={16} />
@@ -517,7 +494,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__edit"
           onClick={() => openEdit(note)}
-          disabled={busyId === note.id}
           aria-label="Edit reminder"
         >
           <Pencil size={15} />
@@ -526,7 +502,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__delete"
           onClick={(e) => void handleDelete(note, e)}
-          disabled={busyId === note.id}
           aria-label="Delete reminder"
         >
           <Trash2 size={16} />
@@ -545,7 +520,6 @@ export function NotesPage({
         {!archived && (
           <ThemedCheckbox
             className="notes-todo-item__check"
-            disabled={busyId === note.id}
             onChange={() => void handleCheck(note)}
             aria-label="Mark to-do done"
           />
@@ -562,7 +536,6 @@ export function NotesPage({
             type="button"
             className="notes-line-item__edit"
             onClick={() => openEdit(note)}
-            disabled={busyId === note.id}
             aria-label="Edit to-do"
           >
             <Pencil size={15} />
@@ -572,7 +545,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__delete"
           onClick={(e) => void handleDelete(note, e)}
-          disabled={busyId === note.id}
           aria-label="Delete to-do"
         >
           <Trash2 size={16} />
@@ -599,7 +571,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__edit"
           onClick={() => openEdit(note)}
-          disabled={busyId === note.id}
           aria-label="Edit note"
         >
           <Pencil size={15} />
@@ -608,7 +579,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__archive"
           onClick={(e) => void handleArchive(note, e)}
-          disabled={busyId === note.id}
           aria-label="Archive note"
         >
           <Archive size={15} />
@@ -617,7 +587,6 @@ export function NotesPage({
           type="button"
           className="notes-line-item__delete"
           onClick={(e) => void handleDelete(note, e)}
-          disabled={busyId === note.id}
           aria-label="Delete note"
         >
           <Trash2 size={16} />

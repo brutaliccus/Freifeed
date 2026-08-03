@@ -55,7 +55,7 @@ interface TransferMilkSheetProps {
   initialLot: MilkLot
   sourceLots: MilkLot[]
   onClose: () => void
-  onConfirm: (lotIds: string[], bagVolumesOz: number[]) => Promise<void>
+  onConfirm: (lotIds: string[], bagVolumesOz: number[]) => void | Promise<void>
 }
 
 export function TransferMilkSheet({
@@ -70,7 +70,6 @@ export function TransferMilkSheet({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [bagCount, setBagCount] = useState('1')
   const [bagVolumes, setBagVolumes] = useState<string[]>([''])
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const lotById = useMemo(() => new Map(sourceLots.map((l) => [l.id, l])), [sourceLots])
@@ -144,7 +143,7 @@ export function TransferMilkSheet({
     if (capError) setError(capError)
   }
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     setError(null)
     if (selectedLots.length === 0) {
       setError(cfg.emptySourceError)
@@ -157,14 +156,11 @@ export function TransferMilkSheet({
       return
     }
 
-    setSaving(true)
     try {
-      await onConfirm(selectedIds, parsed)
+      void onConfirm(selectedIds, parsed)
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : cfg.transferError)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -274,16 +270,16 @@ export function TransferMilkSheet({
           </div>
 
           <footer className="modal__footer transfer-freezer-sheet__footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => void handleConfirm()}
-              disabled={saving || !validation.valid || selectedLots.length === 0}
+              onClick={handleConfirm}
+              disabled={!validation.valid || selectedLots.length === 0}
             >
-              {saving ? 'Saving…' : cfg.confirmLabel}
+              {cfg.confirmLabel}
             </button>
           </footer>
         </div>

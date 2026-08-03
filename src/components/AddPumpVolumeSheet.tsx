@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { updateFeeding } from '../lib/feedings'
+import { updateFeedingOptimistic } from '../lib/feedings'
 import { parseVolumeOzInput } from '../lib/feedingTypes'
 import { timestampToDate } from '../lib/time'
 import {
@@ -30,12 +30,11 @@ export function AddPumpVolumeSheet({
   const [existingLotId, setExistingLotId] = useState<string | null>(null)
   const [storage, setStorage] = useState(feeding.milkStorage ?? 'fridge')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const parsedVolume = useMemo(() => parseVolumeOzInput(volume), [volume])
   const { split } = usePumpMilkStorageForm(parsedVolume ?? 0)
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const parsed = parseVolumeOzInput(volume)
     if (parsed == null || parsed <= 0) {
       setError('Enter a volume greater than 0')
@@ -51,10 +50,11 @@ export function AddPumpVolumeSheet({
       return
     }
 
-    setBusy(true)
     setError(null)
-    try {
-      await updateFeeding(householdId, feeding.id, {
+    updateFeedingOptimistic(
+      householdId,
+      feeding.id,
+      {
         type: 'pump',
         babyId: feeding.babyId,
         side: feeding.side,
@@ -68,14 +68,11 @@ export function AddPumpVolumeSheet({
         note: feeding.note,
         milkBagVolumes: payload.addToLotId ? undefined : payload.bagVolumesOz,
         addToLotId: payload.addToLotId ?? null,
-      })
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save volume')
-    } finally {
-      setBusy(false)
-    }
+      },
+      { onOptimistic: () => {} },
+    )
+    onSaved()
+    onClose()
   }
 
   return (
@@ -105,7 +102,6 @@ export function AddPumpVolumeSheet({
             onChange={(e) => setVolume(e.target.value)}
             placeholder="0.0"
             autoFocus
-            disabled={busy}
           />
         </label>
 
@@ -119,22 +115,16 @@ export function AddPumpVolumeSheet({
           existingLotId={existingLotId}
           onExistingLotIdChange={setExistingLotId}
           split={split}
-          disabled={busy}
         />
 
         {error && <p className="error-text">{error}</p>}
 
         <footer className="modal__footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn--grow"
-            onClick={() => void handleSave()}
-            disabled={busy}
-          >
-            {busy ? 'Saving…' : 'Save volume'}
+          <button type="button" className="btn btn-primary btn--grow" onClick={handleSave}>
+            Save volume
           </button>
         </footer>
       </div>

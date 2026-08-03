@@ -1,70 +1,44 @@
 import { useCallback, useEffect, useState } from 'react'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '../firebase'
-import {
-  flushOfflineQueue,
-  getOfflineQueueCount,
-  enqueueMutation,
-  isLikelyOfflineError,
-} from './offlineQueue'
+import { flushPendingMutations } from './mutationQueue'
+import { getFailedQueueCount, getOfflineQueueCount } from './offlineQueue'
 import { useOnlineStatus } from './networkStatus'
 
-let flushInFlight = false
-
-async function executeCallable(name: string, payload: unknown): Promise<unknown> {
-  const fn = httpsCallable(functions, name)
-  const res = await fn(payload as Record<string, unknown>)
-  return res.data
-}
-
-export async function flushPendingMutations(): Promise<void> {
-  if (flushInFlight || typeof navigator === 'undefined' || !navigator.onLine) return
-  flushInFlight = true
-  try {
-    await flushOfflineQueue(executeCallable)
-  } finally {
-    flushInFlight = false
-    window.dispatchEvent(new CustomEvent('freifeed-offline-queue-changed'))
-  }
-}
+export { flushPendingMutations }
 
 export function useSyncQueue() {
   const online = useOnlineStatus()
   const [pendingCount, setPendingCount] = useState(getOfflineQueueCount)
+  const [failedCount, setFailedCount] = useState(getFailedQueueCount)
 
   useEffect(() => {
-    const bump = () => setPendingCount(getOfflineQueueCount())
+    const bump = () => {
+      setPendingCount(getOfflineQueueCount())
+      setFailedCount(getFailedQueueCount())
+    }
     window.addEventListener('freifeed-offline-queue-changed', bump)
-    return () => window.removeEventListener('freifeed-offline-queue-changed', bump)
+    window.addEventListener('freifeed-pending-mutations-changed', bump)
+    return () => {
+      window.removeEventListener('freifeed-offline-queue-changed', bump)
+      window.removeEventListener('freifeed-pending-mutations-changed', bump)
+    }
   }, [])
 
   useEffect(() => {
     if (online && pendingCount > 0) void flushPendingMutations()
   }, [online, pendingCount])
 
-  return { online, pendingCount, flush: flushPendingMutations }
-}
+  // Periodic flush while there are pending items (covers missed online events).
+  useEffect(() => {
+    if (!online || pendingCount <= 0) return
+    const interval = window.setInterval(() => void flushPendingMutations(), 15_000)
+    return () => window.clearInterval(interval)
+  }, [online, pendingCount])
 
-export function wrapCallable<TReq, TRes>(
-  name: string,
-  invoke: (payload: TReq) => Promise<TRes>,
-  options?: { queueOnFailure?: boolean },
-): (payload: TReq) => Promise<TRes> {
-  const queueOnFailure = options?.queueOnFailure !== false
-  return async (payload: TReq) => {
-    try {
-      return await invoke(payload)
-    } catch (err) {
-      if (queueOnFailure && isLikelyOfflineError(err)) {
-        enqueueMutation(name, payload)
-      }
-      throw err
-    }
-  }
+  return { online, pendingCount, failedCount, flush: flushPendingMutations }
 }
 
 export function useSyncStatus(errors: (string | null | undefined)[]) {
-  const { online, pendingCount, flush } = useSyncQueue()
+  const { online, pendingCount, failedCount, flush } = useSyncQueue()
   const activeErrors = errors.filter(Boolean) as string[]
 
   const status: 'ok' | 'offline' | 'pending' | 'error' =
@@ -72,7 +46,7 @@ export function useSyncStatus(errors: (string | null | undefined)[]) {
       ? 'offline'
       : pendingCount > 0
         ? 'pending'
-        : activeErrors.length > 0
+        : failedCount > 0 || activeErrors.length > 0
           ? 'error'
           : 'ok'
 
@@ -82,7 +56,9 @@ export function useSyncStatus(errors: (string | null | undefined)[]) {
       : status === 'pending'
         ? `Syncing ${pendingCount} pending change${pendingCount === 1 ? '' : 's'}…`
         : status === 'error'
-          ? activeErrors[0]
+          ? failedCount > 0
+            ? `${failedCount} change${failedCount === 1 ? '' : 's'} failed to sync — tap Retry`
+            : activeErrors[0]
           : null
 
   const retry = useCallback(async () => {

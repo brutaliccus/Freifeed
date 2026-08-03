@@ -21,18 +21,18 @@ export function MedicineNotificationSettings({ onEnabledChange }: MedicineNotifi
   const toggle = async () => {
     if (busy) return
     const next = !enabled
-    setBusy(true)
-    try {
-      if (next) {
+    if (next) {
+      setBusy(true)
+      try {
         const perm = await requestPermission()
         if (perm !== 'granted') return
+      } finally {
+        setBusy(false)
       }
-      setMedicineNotificationsEnabled(next)
-      onEnabledChange(next)
-      setEnabled(next)
-    } finally {
-      setBusy(false)
     }
+    setEnabled(next)
+    setMedicineNotificationsEnabled(next)
+    onEnabledChange(next)
   }
 
   return (

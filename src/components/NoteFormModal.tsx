@@ -6,7 +6,7 @@ import { TimePickerField } from './TimePickerField'
 import { PersonPuck } from './PersonPuck'
 import { AppointmentRecurrenceFields, type RecurrenceEndMode } from './AppointmentRecurrenceFields'
 import { ReminderPickerField } from './ReminderPickerField'
-import { createNote, updateNote, type NoteInput } from '../lib/notes'
+import { createNoteBackground, updateNoteBackground, type NoteInput } from '../lib/notes'
 import { buildNoteSubjects } from '../lib/noteSubjects'
 import { isScheduledNoteKind, noteForPersonIds } from '../lib/notePeople'
 import {
@@ -118,7 +118,6 @@ export function NoteFormModal({
   const [recurrenceCount, setRecurrenceCount] = useState(initial.recurrenceCount)
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(initial.recurrenceEndDate)
   const [inviteeIds, setInviteeIds] = useState<string[]>(initial.inviteeIds)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const scheduledKind = isScheduledNoteKind(kind)
@@ -250,7 +249,7 @@ export function NoteFormModal({
     return { kind: 'todo', forPersonId: personId, text: trimmed }
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (kind === 'todo' && !isEditing) {
       const lines = text
         .split('\n')
@@ -265,42 +264,26 @@ export function NoteFormModal({
         return
       }
 
-      setSaving(true)
       setError(null)
-      try {
-        await Promise.all(
-          lines.map((line) =>
-            createNote(householdId, { kind: 'todo', forPersonId: personId, text: line }),
-          ),
-        )
-        onSaved()
-        onClose()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not save')
-      } finally {
-        setSaving(false)
+      for (const line of lines) {
+        createNoteBackground(householdId, { kind: 'todo', forPersonId: personId, text: line })
       }
+      onSaved()
+      onClose()
       return
     }
 
     const input = buildInput()
     if (!input) return
 
-    setSaving(true)
     setError(null)
-    try {
-      if (isEditing && editing) {
-        await updateNote(householdId, editing.id, input)
-      } else {
-        await createNote(householdId, input)
-      }
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save')
-    } finally {
-      setSaving(false)
+    if (isEditing && editing) {
+      updateNoteBackground(householdId, editing.id, input)
+    } else {
+      createNoteBackground(householdId, input)
     }
+    onSaved()
+    onClose()
   }
 
   const kindLabel = (k: NoteKind) => {
@@ -398,7 +381,6 @@ export function NoteFormModal({
                           : 'Insurance called back — reference #…'
                   }
                   autoFocus
-                  disabled={saving}
                 />
               </label>
 
@@ -424,20 +406,11 @@ export function NoteFormModal({
                   )}
 
                   <div className="note-appt-when">
-                    <FeedDateButton value={dateStr} onChange={setDateStr} disabled={saving} />
-                    <TimePickerField
-                      label="Time"
-                      value={timeStr}
-                      onChange={setTimeStr}
-                      disabled={saving}
-                    />
+                    <FeedDateButton value={dateStr} onChange={setDateStr} />
+                    <TimePickerField label="Time" value={timeStr} onChange={setTimeStr} />
                   </div>
 
-                  <ReminderPickerField
-                    value={reminderMinutes}
-                    onChange={setReminderMinutes}
-                    disabled={saving}
-                  />
+                  <ReminderPickerField value={reminderMinutes} onChange={setReminderMinutes} />
 
                   <AppointmentRecurrenceFields
                     enabled={recurring}
@@ -458,7 +431,6 @@ export function NoteFormModal({
                     onOccurrenceCountChange={setRecurrenceCount}
                     endDateStr={recurrenceEndDate}
                     onEndDateStrChange={setRecurrenceEndDate}
-                    disabled={saving}
                   />
 
                   {subjects.length > 1 && (
@@ -491,7 +463,6 @@ export function NoteFormModal({
                       onChange={(e) => setDetails(e.target.value)}
                       maxLength={2000}
                       placeholder="Address, what to bring, doctor name…"
-                      disabled={saving}
                     />
                   </label>
                 </>
@@ -510,21 +481,18 @@ export function NoteFormModal({
               onClick={() =>
                 isEditing || initialKind ? onClose() : setStep('type')
               }
-              disabled={saving}
             >
               Back
             </button>
             <button
               type="button"
               className="btn btn-primary btn--grow feed-drawer__save--notes"
-              onClick={() => void handleSave()}
+              onClick={handleSave}
               disabled={
-                saving ||
-                subjects.length === 0 ||
-                (scheduledKind && forPersonIds.length === 0)
+                subjects.length === 0 || (scheduledKind && forPersonIds.length === 0)
               }
             >
-              {saving ? 'Saving…' : 'Save'}
+              Save
             </button>
           </footer>
         )}

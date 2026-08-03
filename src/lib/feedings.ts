@@ -5,6 +5,11 @@ import {
   apiDeleteFeeding,
   type FeedingInput,
 } from './api'
+import {
+  createFeedingOptimistic,
+  updateFeedingOptimistic,
+  deleteFeedingOptimistic,
+} from './feedingMutations'
 import type { BabyId, Feeding } from '../types'
 import { timestampToDate } from './time'
 
@@ -14,8 +19,13 @@ export async function fetchFeedings(householdId: string): Promise<Feeding[]> {
   return apiListFeedings(householdId)
 }
 
-export async function createFeeding(householdId: string, input: FeedingInput): Promise<string> {
-  return apiCreateFeeding(householdId, input)
+/** Blocking create (legacy / rare). Prefer createFeedingBackground. */
+export async function createFeeding(
+  householdId: string,
+  input: FeedingInput,
+  clientId?: string | null,
+): Promise<string> {
+  return apiCreateFeeding(householdId, input, clientId)
 }
 
 export async function updateFeeding(
@@ -28,6 +38,12 @@ export async function updateFeeding(
 
 export async function deleteFeeding(householdId: string, feedingId: string): Promise<void> {
   await apiDeleteFeeding(householdId, feedingId)
+}
+
+export {
+  createFeedingOptimistic,
+  updateFeedingOptimistic,
+  deleteFeedingOptimistic,
 }
 
 const FEED_DISPLAY_TYPES = new Set<Feeding['type']>(['nursing', 'bottle'])

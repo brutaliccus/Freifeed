@@ -12,6 +12,7 @@ import {
 import { computeNoteArchiveActions } from './noteArchive'
 import { cancelAppointmentNotificationsForNote } from './appointmentNotifications'
 import { isScheduledNoteKind } from './notePeople'
+import { runMutation, newClientId } from './mutationQueue'
 import type { BabyNote } from '../types'
 
 export type { NoteInput, NoteUpdateInput }
@@ -81,6 +82,70 @@ export async function deleteNote(
   } catch (err) {
     throw new Error(formatApiError(err))
   }
+}
+
+/** Background create — UI can close immediately. */
+export function createNoteBackground(householdId: string, input: NoteInput): void {
+  runMutation({
+    name: 'createNote',
+    payload: { householdId, input },
+    coalesceKey: `createNote:${newClientId()}`,
+  })
+}
+
+export function updateNoteBackground(
+  householdId: string,
+  noteId: string,
+  input: NoteUpdateInput,
+): void {
+  runMutation({
+    name: 'updateNote',
+    payload: { householdId, noteId, input },
+    coalesceKey: `updateNote:${noteId}`,
+  })
+}
+
+export function archiveNoteBackground(
+  householdId: string,
+  noteId: string,
+  options?: { occurrenceAt?: string },
+): void {
+  runMutation({
+    name: 'archiveNote',
+    payload: { householdId, noteId, occurrenceAt: options?.occurrenceAt },
+    coalesceKey: `archiveNote:${noteId}`,
+  })
+}
+
+export function unarchiveNoteBackground(
+  householdId: string,
+  noteId: string,
+  options?: { clearOccurrence?: boolean },
+): void {
+  runMutation({
+    name: 'unarchiveNote',
+    payload: {
+      householdId,
+      noteId,
+      clearOccurrence: options?.clearOccurrence ?? false,
+    },
+    coalesceKey: `unarchiveNote:${noteId}`,
+  })
+}
+
+export function deleteNoteBackground(
+  householdId: string,
+  noteId: string,
+  note?: Pick<BabyNote, 'id' | 'kind'>,
+): void {
+  if (note && isScheduledNoteKind(note.kind)) {
+    void cancelAppointmentNotificationsForNote(note.id)
+  }
+  runMutation({
+    name: 'deleteNote',
+    payload: { householdId, noteId },
+    coalesceKey: `deleteNote:${noteId}`,
+  })
 }
 
 /** Auto-archive past scheduled items (+2h grace). Returns true if anything changed. */

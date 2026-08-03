@@ -9,14 +9,14 @@ import { AddPumpVolumeSheet } from '../components/AddPumpVolumeSheet'
 import { QuickAddMilkSheet } from '../components/QuickAddMilkSheet'
 import { RedistributeMilkSheet } from '../components/RedistributeMilkSheet'
 import { TransferMilkSheet, type MilkTransferDirection } from '../components/TransferMilkSheet'
-import { deleteFeeding } from '../lib/feedings'
+import { deleteFeedingOptimistic } from '../lib/feedings'
 import { fridgeLotsWithMilk, frozenLotsWithMilk } from '../lib/milkLotLabels'
 import {
-  combineMilkLots,
-  deleteMilkLot,
-  redistributeMilkLot,
-  transferMilkLotsToFreezer,
-  transferMilkLotsToFridge,
+  combineMilkLotsBackground,
+  deleteMilkLotBackground,
+  redistributeMilkLotBackground,
+  transferMilkLotsToFreezerBackground,
+  transferMilkLotsToFridgeBackground,
 } from '../lib/milkLots'
 import { formatVolumeOz, roundVolumeOz } from '../lib/feedingTypes'
 import { EditMilkLotSheet } from '../components/EditMilkLotSheet'
@@ -84,9 +84,6 @@ export function MilkStoragePage({
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [combineMode, setCombineMode] = useState(false)
   const [combineSelectedIds, setCombineSelectedIds] = useState<string[]>([])
-  const [combineBusy, setCombineBusy] = useState(false)
-  const [bulkFreezeBusy, setBulkFreezeBusy] = useState(false)
-  const [bulkThawBusy, setBulkThawBusy] = useState(false)
   const [combineError, setCombineError] = useState<string | null>(null)
   const [redistributeLots, setRedistributeLots] = useState<MilkLot[]>([])
   const [editLot, setEditLot] = useState<MilkLot | null>(null)
@@ -162,7 +159,7 @@ export function MilkStoragePage({
     )
   }
 
-  const handleBulkThaw = async () => {
+  const handleBulkThaw = () => {
     if (tab !== 'frozen' || combineSelectedIds.length === 0) return
     const lotsToThaw = combineSelectedIds
       .map((id) => lots.find((l) => l.id === id))
@@ -178,23 +175,14 @@ export function MilkStoragePage({
     if (!window.confirm(label)) return
 
     setCombineError(null)
-    setBulkThawBusy(true)
-    setCombineBusy(true)
-    try {
-      const lotIds = lotsToThaw.map((l) => l.id)
-      const bagVolumesOz = lotsToThaw.map((l) => roundVolumeOz(l.remainingOz))
-      await transferMilkLotsToFridge(householdId, lotIds, bagVolumesOz)
-      exitCombineMode()
-      onRefresh()
-    } catch (e) {
-      setCombineError(e instanceof Error ? e.message : 'Could not thaw bags')
-    } finally {
-      setBulkThawBusy(false)
-      setCombineBusy(false)
-    }
+    const lotIds = lotsToThaw.map((l) => l.id)
+    const bagVolumesOz = lotsToThaw.map((l) => roundVolumeOz(l.remainingOz))
+    transferMilkLotsToFridgeBackground(householdId, lotIds, bagVolumesOz)
+    exitCombineMode()
+    onRefresh()
   }
 
-  const handleBulkFreeze = async () => {
+  const handleBulkFreeze = () => {
     if (tab !== 'fridge' || combineSelectedIds.length === 0) return
     const lotsToFreeze = combineSelectedIds
       .map((id) => lots.find((l) => l.id === id))
@@ -210,35 +198,19 @@ export function MilkStoragePage({
     if (!window.confirm(label)) return
 
     setCombineError(null)
-    setBulkFreezeBusy(true)
-    setCombineBusy(true)
-    try {
-      const lotIds = lotsToFreeze.map((l) => l.id)
-      const bagVolumesOz = lotsToFreeze.map((l) => roundVolumeOz(l.remainingOz))
-      await transferMilkLotsToFreezer(householdId, lotIds, bagVolumesOz)
-      exitCombineMode()
-      onRefresh()
-    } catch (e) {
-      setCombineError(e instanceof Error ? e.message : 'Could not freeze bags')
-    } finally {
-      setBulkFreezeBusy(false)
-      setCombineBusy(false)
-    }
+    const lotIds = lotsToFreeze.map((l) => l.id)
+    const bagVolumesOz = lotsToFreeze.map((l) => roundVolumeOz(l.remainingOz))
+    transferMilkLotsToFreezerBackground(householdId, lotIds, bagVolumesOz)
+    exitCombineMode()
+    onRefresh()
   }
 
-  const handleCombineConfirm = async () => {
+  const handleCombineConfirm = () => {
     if (combineSelectedIds.length < 2) return
     setCombineError(null)
-    setCombineBusy(true)
-    try {
-      await combineMilkLots(householdId, combineSelectedIds, null)
-      exitCombineMode()
-      onRefresh()
-    } catch (e) {
-      setCombineError(e instanceof Error ? e.message : 'Could not combine bags')
-    } finally {
-      setCombineBusy(false)
-    }
+    combineMilkLotsBackground(householdId, combineSelectedIds, null)
+    exitCombineMode()
+    onRefresh()
   }
 
   const selectedLots = useMemo(
@@ -254,9 +226,9 @@ export function MilkStoragePage({
     setRedistributeLots(selectedLots)
   }
 
-  const handleRedistributeConfirm = async (bagVolumesOz: number[]) => {
+  const handleRedistributeConfirm = (bagVolumesOz: number[]) => {
     if (redistributeLots.length === 0) return
-    await redistributeMilkLot(
+    redistributeMilkLotBackground(
       householdId,
       redistributeLots.map((lot) => lot.id),
       bagVolumesOz,
@@ -266,24 +238,24 @@ export function MilkStoragePage({
     onRefresh()
   }
 
-  const handleDelete = async (lotId: string) => {
+  const handleDelete = (lotId: string) => {
     if (!window.confirm('Remove this stored milk entry?')) return
-    await deleteMilkLot(householdId, lotId)
+    deleteMilkLotBackground(householdId, lotId)
     onRefresh()
   }
 
-  const handleDeletePending = async (feedingId: string) => {
+  const handleDeletePending = (feedingId: string) => {
     if (!window.confirm('Remove this pump session?')) return
-    await deleteFeeding(householdId, feedingId)
+    deleteFeedingOptimistic(householdId, feedingId, { onOptimistic: () => {} })
     onRefresh()
   }
 
-  const handleTransferConfirm = async (lotIds: string[], bagVolumesOz: number[]) => {
+  const handleTransferConfirm = (lotIds: string[], bagVolumesOz: number[]) => {
     if (!transfer) return
     if (transfer.direction === 'to-freezer') {
-      await transferMilkLotsToFreezer(householdId, lotIds, bagVolumesOz)
+      transferMilkLotsToFreezerBackground(householdId, lotIds, bagVolumesOz)
     } else {
-      await transferMilkLotsToFridge(householdId, lotIds, bagVolumesOz)
+      transferMilkLotsToFridgeBackground(householdId, lotIds, bagVolumesOz)
     }
     onRefresh()
   }
@@ -473,8 +445,8 @@ export function MilkStoragePage({
             <button
               type="button"
               className="milk-storage-action-bar__btn milk-storage-action-bar__btn--freeze"
-              onClick={() => void handleBulkFreeze()}
-              disabled={combineBusy || bulkFreezeBusy || bulkThawBusy || combineSelectedIds.length < 1}
+              onClick={handleBulkFreeze}
+              disabled={combineSelectedIds.length < 1}
               aria-label={`Freeze ${combineSelectedIds.length} bag(s)`}
             >
               <IceCubeIcon size={72} />
@@ -484,8 +456,8 @@ export function MilkStoragePage({
             <button
               type="button"
               className="milk-storage-action-bar__btn milk-storage-action-bar__btn--thaw"
-              onClick={() => void handleBulkThaw()}
-              disabled={combineBusy || bulkThawBusy || bulkFreezeBusy || combineSelectedIds.length < 1}
+              onClick={handleBulkThaw}
+              disabled={combineSelectedIds.length < 1}
               aria-label={`Thaw ${combineSelectedIds.length} bag(s)`}
             >
               <FridgeIcon size={72} />
@@ -494,8 +466,8 @@ export function MilkStoragePage({
           <button
             type="button"
             className="milk-storage-action-bar__btn milk-storage-action-bar__btn--combine"
-            onClick={() => void handleCombineConfirm()}
-            disabled={combineBusy || combineSelectedIds.length < 2}
+            onClick={handleCombineConfirm}
+            disabled={combineSelectedIds.length < 2}
             aria-label={`Combine ${combineSelectedIds.length} bags`}
           >
             <CombineBagsIcon />
@@ -504,7 +476,7 @@ export function MilkStoragePage({
             type="button"
             className="milk-storage-action-bar__btn milk-storage-action-bar__btn--redistribute"
             onClick={openRedistribute}
-            disabled={combineBusy || combineSelectedIds.length < 1}
+            disabled={combineSelectedIds.length < 1}
             aria-label="Redistribute milk into smaller bags"
           >
             <RedistributeIcon size={72} />
@@ -513,7 +485,6 @@ export function MilkStoragePage({
             type="button"
             className="milk-storage-action-bar__btn milk-storage-action-bar__btn--cancel"
             onClick={exitCombineMode}
-            disabled={combineBusy}
             aria-label="Cancel selection"
           >
             ×

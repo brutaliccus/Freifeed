@@ -11,7 +11,7 @@ import { BottleMilkSourceSheet } from './BottleMilkSourceSheet'
 import { SideTogglePicker } from './SideTogglePicker'
 import { FridgeIcon, IceCubeIcon } from './StorageIcons'
 import { type ActiveFeedDraft, isSessionStarted, isTimerPaused, isTimerRunning } from '../lib/activeFeedSession'
-import { createFeeding, updateFeeding, deleteFeeding, type FeedingInput } from '../lib/feedings'
+import { type FeedingInput } from '../lib/feedings'
 import { BottleFeedSelectedBags } from './BottleFeedSelectedBags'
 import { deductionsMatchVolume } from '../lib/milkBottleDeductions'
 import { formatMilkLotOption } from '../lib/milkLotLabels'
@@ -41,11 +41,14 @@ interface FeedDrawerProps {
   buildInput: (draft: ActiveFeedDraft) => FeedingInput
   onDraftChange: (patch: Partial<ActiveFeedDraft>) => void
   syncing?: boolean
-  onStartTimer: () => void | Promise<void>
+  onStartTimer: () => void
   onPauseTimer: () => void
   onResumeTimer: () => void
   onSyncEndTime?: (endTime: string) => void
-  onStopForSave?: (endTime: string) => Promise<void>
+  onStopForSave?: (endTime: string) => void
+  /** Background save — must apply optimistic local state and return immediately. */
+  onSaveBackground: (draft: ActiveFeedDraft, input: FeedingInput) => void
+  onDiscardBackground: (draft: ActiveFeedDraft) => void
   onMinimize: () => void
   onSaved: () => void
   onRefreshMilk?: () => void
@@ -59,7 +62,7 @@ interface FeedDrawerProps {
 }
 
 export function FeedDrawer({
-  householdId,
+  householdId: _householdId,
   babies,
   milkLots,
   draft,
@@ -72,6 +75,8 @@ export function FeedDrawer({
   onResumeTimer,
   onSyncEndTime,
   onStopForSave,
+  onSaveBackground,
+  onDiscardBackground,
   onMinimize,
   onSaved,
   onRefreshMilk,
@@ -162,7 +167,7 @@ export function FeedDrawer({
 
     try {
       if (needsStop && onStopForSave) {
-        await onStopForSave(endTime)
+        onStopForSave(endTime)
         saveDraft = {
           ...saveDraft,
           endTime,
@@ -226,11 +231,7 @@ export function FeedDrawer({
         return
       }
 
-      if (saveDraft.feedingId) {
-        await updateFeeding(householdId, saveDraft.feedingId, input)
-      } else {
-        await createFeeding(householdId, input)
-      }
+      onSaveBackground(saveDraft, input)
       onClearSession()
       onSaved()
       onMinimize()
@@ -263,21 +264,12 @@ export function FeedDrawer({
     await performSave()
   }
 
-  const handleDiscard = async () => {
-    setSaving(true)
+  const handleDiscard = () => {
     setError(null)
-    try {
-      if (draft.feedingId) {
-        await deleteFeeding(householdId, draft.feedingId)
-      }
-      onClearSession()
-      onSaved()
-      onMinimize()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not discard')
-    } finally {
-      setSaving(false)
-    }
+    onDiscardBackground(draft)
+    onClearSession()
+    onSaved()
+    onMinimize()
   }
 
   const title =
@@ -292,14 +284,12 @@ export function FeedDrawer({
 
   const handleFooterAction = async () => {
     if (showStartSession) {
-      setSaving(true)
       setError(null)
       try {
-        await onStartTimer()
+        onStartTimer()
+        onMinimize()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not start session')
-      } finally {
-        setSaving(false)
       }
       return
     }

@@ -37,39 +37,41 @@ export function NursingSessionReminderSettings({
   const { permission, requestPermission } = useNotificationPermissionState()
   const native = usesNativeNotifications()
 
-  const pushReminders = async (nextEnabled = enabled) => {
-    if (!nextEnabled) {
-      if (native) await syncNativeNursingSessionReminders(null)
-      else await syncNursingSessionRemindersToServiceWorker(null)
-      return
-    }
-    const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
-    const next = { ...payload, enabled: true }
-    if (native) await syncNativeNursingSessionReminders(next)
-    else await syncNursingSessionRemindersToServiceWorker(next)
+  const pushReminders = (nextEnabled: boolean) => {
+    void (async () => {
+      if (!nextEnabled) {
+        if (native) await syncNativeNursingSessionReminders(null)
+        else await syncNursingSessionRemindersToServiceWorker(null)
+        return
+      }
+      const payload = buildNursingSessionReminderPayload(feedings, babies, localSessions)
+      const next = { ...payload, enabled: true }
+      if (native) await syncNativeNursingSessionReminders(next)
+      else await syncNursingSessionRemindersToServiceWorker(next)
+    })()
   }
 
-  const saveMinutes = async (value: number) => {
+  const saveMinutes = (value: number) => {
     setNursingSessionReminderMinutes(value)
     setMinutes(value)
-    if (enabled) await pushReminders(true)
+    if (enabled) pushReminders(true)
   }
 
   const toggle = async () => {
     if (busy) return
     const next = !enabled
-    setBusy(true)
-    try {
-      if (next) {
+    if (next) {
+      setBusy(true)
+      try {
         const perm = await requestPermission()
         if (perm !== 'granted') return
+      } finally {
+        setBusy(false)
       }
-      setNursingSessionReminderEnabled(next)
-      await pushReminders(next)
-      setEnabled(next)
-    } finally {
-      setBusy(false)
     }
+    setEnabled(next)
+    setNursingSessionReminderEnabled(next)
+    pushReminders(next)
   }
 
   const tickCount =
@@ -100,7 +102,7 @@ export function NursingSessionReminderSettings({
           max={NURSING_SESSION_REMINDER_MAX_MIN}
           step={NURSING_SESSION_REMINDER_STEP_MIN}
           value={minutes}
-          onChange={(e) => void saveMinutes(Number(e.target.value))}
+          onChange={(e) => saveMinutes(Number(e.target.value))}
           aria-valuetext={`${minutes} minutes`}
         />
         <div className="reminder-snooze-slider__ticks banner-timeout-slider__ticks" aria-hidden>

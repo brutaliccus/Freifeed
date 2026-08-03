@@ -6,33 +6,29 @@ import type { MilkLot } from '../types'
 interface RedistributeMilkSheetProps {
   lots: MilkLot[]
   onClose: () => void
-  onConfirm: (bagVolumesOz: number[]) => Promise<void>
+  onConfirm: (bagVolumesOz: number[]) => void | Promise<void>
 }
 
 export function RedistributeMilkSheet({ lots, onClose, onConfirm }: RedistributeMilkSheetProps) {
   const totalOz = lots.reduce((sum, lot) => sum + lot.remainingOz, 0)
   const sourceCount = lots.length
   const split = useMilkBagSplitState(totalOz)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const ozLabel = formatVolumeOz(totalOz) || String(totalOz)
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     setError(null)
     const volumes = split.parsedVolumes()
     if (!volumes || !split.validation.valid) {
       setError(split.validation.message ?? 'Enter a volume for each bag')
       return
     }
-    setSaving(true)
     try {
-      await onConfirm(volumes)
+      void onConfirm(volumes)
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not redistribute milk')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -62,23 +58,22 @@ export function RedistributeMilkSheet({ lots, onClose, onConfirm }: Redistribute
             onBagCountChange={split.setBagCount}
             onBagVolumesChange={split.setBagVolumes}
             onError={setError}
-            disabled={saving}
           />
 
           {error && <p className="error-text">{error}</p>}
         </div>
 
         <footer className="modal__footer transfer-freezer-sheet__footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => void handleConfirm()}
-            disabled={saving || !split.validation.valid}
+            onClick={handleConfirm}
+            disabled={!split.validation.valid}
           >
-            {saving ? 'Saving…' : 'Redistribute'}
+            Redistribute
           </button>
         </footer>
       </div>

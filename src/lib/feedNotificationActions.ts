@@ -13,8 +13,8 @@ export async function endActiveFeedFromNotification(
   deps: {
     localSessions: ActiveFeedDraft[]
     feedings: Feeding[]
-    stopTimer: (sessionId: string) => Promise<void>
-    stopFeedingRecord: (feeding: Feeding) => Promise<unknown>
+    stopTimer: (sessionId: string, endTimeOverride?: string) => void | Promise<void>
+    stopFeedingRecord: (feeding: Feeding) => unknown
   },
 ): Promise<void> {
   const { babyId, feedingId } = payload
@@ -24,7 +24,7 @@ export async function endActiveFeedFromNotification(
   if (feedingIdStr && !feedingIdStr.startsWith('local-')) {
     const feeding = feedings.find((f) => f.id === feedingIdStr)
     if (feeding && !feeding.endAt) {
-      await stopFeedingRecord(feeding)
+      await Promise.resolve(stopFeedingRecord(feeding))
       return
     }
   }
@@ -33,7 +33,7 @@ export async function endActiveFeedFromNotification(
     (s) => isSessionInProgress(s) && s.babyId === babyId && s.kind === 'nursing',
   )
   if (local) {
-    await stopTimer(local.sessionId)
+    await Promise.resolve(stopTimer(local.sessionId))
     return
   }
 
@@ -43,9 +43,9 @@ export async function endActiveFeedFromNotification(
   if (remote.length === 1) {
     const existing = findLocalSessionForFeeding(localSessions, remote[0])
     if (existing && isSessionInProgress(existing)) {
-      await stopTimer(existing.sessionId)
+      await Promise.resolve(stopTimer(existing.sessionId))
       return
     }
-    await stopFeedingRecord(remote[0])
+    await Promise.resolve(stopFeedingRecord(remote[0]))
   }
 }

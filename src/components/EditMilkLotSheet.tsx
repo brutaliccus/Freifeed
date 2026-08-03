@@ -10,7 +10,7 @@ import {
   FROZEN_STORAGE_MONTHS,
   formatMilkTimeRemaining,
 } from '../lib/milkExpiration'
-import { updateMilkLot } from '../lib/milkLots'
+import { updateMilkLotBackground } from '../lib/milkLots'
 import {
   combineDateAndTime,
   dateToTimeInputValue,
@@ -44,7 +44,6 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
   const [storedTime, setStoredTime] = useState(() => dateToTimeInputValue(initialStored) || '12:00')
   const [note, setNote] = useState(lot.note ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const parsedTotal = useMemo(() => parseVolumeOzInput(totalOz), [totalOz])
   const parsedRemaining = useMemo(() => parseVolumeOzInput(remainingOz), [remainingOz])
@@ -81,7 +80,7 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const total = parseVolumeOzInput(totalOz)
     const remaining = parseVolumeOzInput(remainingOz)
     if (total == null || total <= 0) {
@@ -101,24 +100,17 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
       return
     }
 
-    setBusy(true)
     setError(null)
-    try {
-      const storedChanged =
-        !initialStored || parsedStoredAt.getTime() !== initialStored.getTime()
-      await updateMilkLot(householdId, lot.id, {
-        volumeOz: total,
-        remainingOz: remaining,
-        note: note.trim() || null,
-        storedAt: storedChanged ? parsedStoredAt : undefined,
-      })
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update bag')
-    } finally {
-      setBusy(false)
-    }
+    const storedChanged =
+      !initialStored || parsedStoredAt.getTime() !== initialStored.getTime()
+    updateMilkLotBackground(householdId, lot.id, {
+      volumeOz: total,
+      remainingOz: remaining,
+      note: note.trim() || null,
+      storedAt: storedChanged ? parsedStoredAt : undefined,
+    })
+    onSaved()
+    onClose()
   }
 
   const storageLabel = lot.storage === 'fridge' ? 'refrigerated' : 'frozen'
@@ -152,7 +144,6 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
                   setError(null)
                   setStoredDate(e.target.value)
                 }}
-                disabled={busy}
               />
               <TimePickerField
                 label="Time"
@@ -163,7 +154,6 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
                   setError(null)
                   setStoredTime(value)
                 }}
-                disabled={busy}
               />
             </div>
             {expirationPreview && (
@@ -233,16 +223,16 @@ export function EditMilkLotSheet({ householdId, lot, onClose, onSaved }: EditMil
         </div>
 
         <footer className="modal__footer transfer-freezer-sheet__footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => void handleSave()}
-            disabled={busy || parsedTotal == null || parsedRemaining == null}
+            onClick={handleSave}
+            disabled={parsedTotal == null || parsedRemaining == null}
           >
-            {busy ? 'Saving…' : 'Save'}
+            Save
           </button>
         </footer>
       </div>

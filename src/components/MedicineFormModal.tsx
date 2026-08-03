@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pencil, X } from 'lucide-react'
 import { PillIcon } from './PillIcon'
 import { TimePickerField } from './TimePickerField'
-import { createMedicine, updateMedicine, type MedicineInput } from '../lib/medicines'
+import {
+  createMedicineBackground,
+  updateMedicineBackground,
+  type MedicineInput,
+} from '../lib/medicines'
 import {
   DEFAULT_TIMES_BY_FREQUENCY,
   DOSAGE_UNITS,
@@ -144,7 +148,6 @@ export function MedicineFormModal({
   const [form, setForm] = useState<FormState>(() =>
     initialFormState(medicine, defaultForPersonId),
   )
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** Edit mode: full last-dose picker hidden until pencil is tapped. */
   const [lastDoseEditorOpen, setLastDoseEditorOpen] = useState(false)
@@ -227,7 +230,7 @@ export function MedicineFormModal({
     }
   }, [lastDoseChoices, editing, form.lastDoseId])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     if (!form.name.trim()) {
@@ -307,27 +310,24 @@ export function MedicineFormModal({
       active: true,
     }
 
-    setSaving(true)
-    try {
-      if (editing && medicine) {
-        // Preserve the original start time when editing so duration math doesn't reset.
-        const startedAt = timestampToDate(medicine.startedAt) ?? new Date()
-        const payload: MedicineInput = { ...input, startedAt }
-        if (lastTakenSelection) {
-          payload.lastTakenAt = lastTakenSelection.takenAt
-        }
-        await updateMedicine(householdId, medicine.id, payload)
-      } else {
-        const lastTakenAt = lastTakenSelection?.takenAt ?? null
-        await createMedicine(householdId, { ...input, startedAt: new Date(), lastTakenAt })
+    if (editing && medicine) {
+      // Preserve the original start time when editing so duration math doesn't reset.
+      const startedAt = timestampToDate(medicine.startedAt) ?? new Date()
+      const payload: MedicineInput = { ...input, startedAt }
+      if (lastTakenSelection) {
+        payload.lastTakenAt = lastTakenSelection.takenAt
       }
-      onSaved()
-      onClose()
-    } catch (e2) {
-      setError(e2 instanceof Error ? e2.message : 'Could not save')
-    } finally {
-      setSaving(false)
+      updateMedicineBackground(householdId, medicine.id, payload)
+    } else {
+      const lastTakenAt = lastTakenSelection?.takenAt ?? null
+      createMedicineBackground(householdId, {
+        ...input,
+        startedAt: new Date(),
+        lastTakenAt,
+      })
     }
+    onSaved()
+    onClose()
   }
 
   useEffect(() => {
@@ -363,7 +363,6 @@ export function MedicineFormModal({
                 className={`medicine-modal__assignee-btn${form.forPersonId === person.id ? ' medicine-modal__assignee-btn--active' : ''}`}
                 aria-pressed={form.forPersonId === person.id}
                 onClick={() => setField('forPersonId', person.id)}
-                disabled={saving}
               >
                 {person.label}
               </button>
@@ -624,11 +623,11 @@ export function MedicineFormModal({
         {error && <p className="error-text">{error}</p>}
 
         <footer className="modal__footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary btn--grow" disabled={saving}>
-            {saving ? 'Saving…' : editing ? 'Save changes' : 'Add medicine'}
+          <button type="submit" className="btn btn-primary btn--grow">
+            {editing ? 'Save changes' : 'Add medicine'}
           </button>
         </footer>
       </form>

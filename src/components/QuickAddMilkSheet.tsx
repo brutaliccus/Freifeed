@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createFeeding } from '../lib/feedings'
+import { createFeedingOptimistic } from '../lib/feedings'
 import { parseVolumeOzInput } from '../lib/feedingTypes'
 import {
   combineDateAndTime,
@@ -34,13 +34,12 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
   const [existingLotId, setExistingLotId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const parsedVolume = useMemo(() => parseVolumeOzInput(volume), [volume])
   const [storage, setStorage] = useState<'fridge' | 'frozen'>('fridge')
   const { split } = usePumpMilkStorageForm(parsedVolume ?? 0)
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const parsed = parseVolumeOzInput(volume)
     if (parsed == null || parsed <= 0) {
       setError('Enter a volume greater than 0')
@@ -61,10 +60,10 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
       return
     }
 
-    setBusy(true)
     setError(null)
-    try {
-      await createFeeding(householdId, {
+    createFeedingOptimistic(
+      householdId,
+      {
         type: 'pump',
         babyId: pumpBabyId,
         side: null,
@@ -78,14 +77,11 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
         note: note.trim() || null,
         milkBagVolumes: payload.addToLotId ? undefined : payload.bagVolumesOz,
         addToLotId: payload.addToLotId ?? null,
-      })
-      onSaved()
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add milk')
-    } finally {
-      setBusy(false)
-    }
+      },
+      { onOptimistic: () => {} },
+    )
+    onSaved()
+    onClose()
   }
 
   return (
@@ -115,7 +111,6 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
             onChange={(e) => setVolume(e.target.value)}
             placeholder="0.0"
             autoFocus
-            disabled={busy}
           />
         </label>
 
@@ -127,7 +122,6 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
               className="input"
               value={storedDate}
               onChange={(e) => setStoredDate(e.target.value)}
-              disabled={busy}
             />
             <TimePickerField
               label="Time"
@@ -135,7 +129,6 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
               className="input quick-add-milk-sheet__time"
               value={storedTime}
               onChange={setStoredTime}
-              disabled={busy}
             />
           </div>
         </div>
@@ -150,7 +143,6 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
           existingLotId={existingLotId}
           onExistingLotIdChange={setExistingLotId}
           split={split}
-          disabled={busy}
         />
 
         <label className="field-block quick-add-milk-sheet__note">
@@ -161,23 +153,17 @@ export function QuickAddMilkSheet({ householdId, lots, pumpBabyId, onClose, onSa
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. morning pump"
-            disabled={busy}
           />
         </label>
 
         {error && <p className="error-text">{error}</p>}
 
         <footer className="modal__footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn--grow"
-            onClick={() => void handleSave()}
-            disabled={busy}
-          >
-            {busy ? 'Saving…' : 'Add to storage'}
+          <button type="button" className="btn btn-primary btn--grow" onClick={handleSave}>
+            Add to storage
           </button>
         </footer>
       </div>

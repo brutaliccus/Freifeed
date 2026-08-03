@@ -293,7 +293,7 @@ export interface FeedingInput {
   addToLotId?: string | null
 }
 
-function inputToPayload(input: FeedingInput) {
+export function inputToPayload(input: FeedingInput) {
   return {
     type: input.type,
     babyId: input.babyId,
@@ -312,10 +312,23 @@ function inputToPayload(input: FeedingInput) {
   }
 }
 
-export async function apiCreateFeeding(householdId: string, input: FeedingInput): Promise<string> {
-  const res = await mutate<{ householdId: string; input: ReturnType<typeof inputToPayload> }, { feedingId: string }>(
-    'createFeeding',
-  )({ householdId, input: inputToPayload(input) })
+export async function apiCreateFeeding(
+  householdId: string,
+  input: FeedingInput,
+  clientId?: string | null,
+): Promise<string> {
+  const res = await mutate<
+    {
+      householdId: string
+      input: ReturnType<typeof inputToPayload>
+      clientId?: string | null
+    },
+    { feedingId: string }
+  >('createFeeding')({
+    householdId,
+    input: inputToPayload(input),
+    clientId: clientId ?? null,
+  })
   return res.data.feedingId
 }
 
@@ -452,7 +465,7 @@ function parseMedicine(raw: RawMedicine): Medicine {
   }
 }
 
-function medicineInputToPayload(input: MedicineInput) {
+export function medicineInputToPayload(input: MedicineInput) {
   const payload: Record<string, unknown> = {
     forPersonId: input.forPersonId,
     name: input.name,
@@ -552,7 +565,7 @@ export interface DiaperInput {
   note?: string | null
 }
 
-function diaperInputToPayload(input: DiaperInput) {
+export function diaperInputToPayload(input: DiaperInput) {
   return {
     babyId: input.babyId,
     kind: input.kind,

@@ -9,6 +9,7 @@ import {
   apiTransferMilkLotToFridge,
   apiRedistributeMilkLot,
 } from './api'
+import { runMutation } from './mutationQueue'
 import type { MilkLot, MilkSummary } from '../types'
 
 export function computeMilkSummary(lots: MilkLot[]): MilkSummary {
@@ -66,6 +67,90 @@ export async function transferMilkLotsToFridge(
   bags: number[],
 ): Promise<void> {
   await apiTransferMilkLotToFridge(householdId, lotIds, bags)
+}
+
+export function transferMilkLotsToFreezerBackground(
+  householdId: string,
+  lotIds: string[],
+  bags: number[],
+): void {
+  const key = [...lotIds].sort().join(',')
+  runMutation({
+    name: 'transferMilkLotToFreezer',
+    payload: { householdId, lotIds, bags },
+    coalesceKey: `transferFreezer:${key}`,
+  })
+}
+
+export function transferMilkLotsToFridgeBackground(
+  householdId: string,
+  lotIds: string[],
+  bags: number[],
+): void {
+  const key = [...lotIds].sort().join(',')
+  runMutation({
+    name: 'transferMilkLotToFridge',
+    payload: { householdId, lotIds, bags },
+    coalesceKey: `transferFridge:${key}`,
+  })
+}
+
+export function updateMilkLotBackground(
+  householdId: string,
+  lotId: string,
+  payload: {
+    volumeOz: number
+    remainingOz: number
+    note?: string | null
+    storedAt?: Date | null
+  },
+): void {
+  runMutation({
+    name: 'updateMilkLot',
+    payload: {
+      householdId,
+      lotId,
+      volumeOz: payload.volumeOz,
+      remainingOz: payload.remainingOz,
+      note: payload.note ?? null,
+      ...(payload.storedAt != null ? { storedAt: payload.storedAt.toISOString() } : {}),
+    },
+    coalesceKey: `updateMilkLot:${lotId}`,
+  })
+}
+
+export function deleteMilkLotBackground(householdId: string, lotId: string): void {
+  runMutation({
+    name: 'deleteMilkLot',
+    payload: { householdId, lotId },
+    coalesceKey: `deleteMilkLot:${lotId}`,
+  })
+}
+
+export function combineMilkLotsBackground(
+  householdId: string,
+  lotIds: string[],
+  addOz?: number | null,
+): void {
+  const key = [...lotIds].sort().join(',')
+  runMutation({
+    name: 'combineMilkLots',
+    payload: { householdId, lotIds, addOz: addOz ?? null },
+    coalesceKey: `combineMilk:${key}`,
+  })
+}
+
+export function redistributeMilkLotBackground(
+  householdId: string,
+  lotIds: string[],
+  bags: number[],
+): void {
+  const key = [...lotIds].sort().join(',')
+  runMutation({
+    name: 'redistributeMilkLot',
+    payload: { householdId, lotIds, bags },
+    coalesceKey: `redistributeMilk:${key}`,
+  })
 }
 
 export async function combineMilkLots(

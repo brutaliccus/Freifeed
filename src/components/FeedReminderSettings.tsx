@@ -38,17 +38,19 @@ export function FeedReminderSettings({ feedings, babies, localSessions }: FeedRe
   const parsedHours = Number(hours)
   const parsedMinutes = Number(minutes)
 
-  const pushToServiceWorker = async (nextEnabled = enabled) => {
-    const settings = getFeedReminderSettings()
-    if (!nextEnabled || !isFeedReminderIntervalValid(settings)) {
-      await syncFeedRemindersToServiceWorker(null)
-      return
-    }
-    const payload = buildFeedReminderPayload(feedings, babies, localSessions)
-    await syncFeedRemindersToServiceWorker({ ...payload, enabled: true })
+  const pushToServiceWorker = (nextEnabled: boolean) => {
+    void (async () => {
+      const settings = getFeedReminderSettings()
+      if (!nextEnabled || !isFeedReminderIntervalValid(settings)) {
+        await syncFeedRemindersToServiceWorker(null)
+        return
+      }
+      const payload = buildFeedReminderPayload(feedings, babies, localSessions)
+      await syncFeedRemindersToServiceWorker({ ...payload, enabled: true })
+    })()
   }
 
-  const saveInterval = async () => {
+  const saveInterval = () => {
     const h = Number.isFinite(parsedHours) ? Math.max(0, Math.min(48, Math.floor(parsedHours))) : 0
     const m = Number.isFinite(parsedMinutes) ? Math.max(0, Math.min(59, Math.floor(parsedMinutes))) : 0
     setHours(String(h))
@@ -58,39 +60,39 @@ export function FeedReminderSettings({ feedings, babies, localSessions }: FeedRe
       setIntervalError('Set at least 1 minute.')
     } else {
       setIntervalError(null)
-      if (enabled) await pushToServiceWorker(true)
+      if (enabled) pushToServiceWorker(true)
     }
   }
 
-  const saveSnooze = async (value: number) => {
+  const saveSnooze = (value: number) => {
     setFeedReminderSnoozeMinutes(value)
     setSnoozeMinutes(value)
-    if (enabled) await pushToServiceWorker(true)
+    if (enabled) pushToServiceWorker(true)
   }
 
   const toggle = async () => {
     if (busy) return
     const next = !enabled
-    setBusy(true)
-    try {
-      if (next) {
-        const h = Number.isFinite(parsedHours) ? Math.max(0, Math.min(48, Math.floor(parsedHours))) : 0
-        const m = Number.isFinite(parsedMinutes) ? Math.max(0, Math.min(59, Math.floor(parsedMinutes))) : 0
-        setFeedReminderInterval(h, m)
-        if (h * 60 + m <= 0) {
-          setIntervalError('Set at least 1 minute before turning on.')
-          return
-        }
-        setIntervalError(null)
+    if (next) {
+      const h = Number.isFinite(parsedHours) ? Math.max(0, Math.min(48, Math.floor(parsedHours))) : 0
+      const m = Number.isFinite(parsedMinutes) ? Math.max(0, Math.min(59, Math.floor(parsedMinutes))) : 0
+      setFeedReminderInterval(h, m)
+      if (h * 60 + m <= 0) {
+        setIntervalError('Set at least 1 minute before turning on.')
+        return
+      }
+      setIntervalError(null)
+      setBusy(true)
+      try {
         const perm = await requestPermission()
         if (perm !== 'granted') return
+      } finally {
+        setBusy(false)
       }
-      setFeedReminderEnabled(next)
-      await pushToServiceWorker(next)
-      setEnabled(next)
-    } finally {
-      setBusy(false)
     }
+    setEnabled(next)
+    setFeedReminderEnabled(next)
+    pushToServiceWorker(next)
   }
 
   return (

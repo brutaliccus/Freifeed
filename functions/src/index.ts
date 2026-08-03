@@ -948,9 +948,11 @@ export const listFeedings = onCall(callableOptions, async (request) => {
 
 export const createFeeding = onCall(callableOptions, async (request) => {
   const uid = requireUid(request)
-  const { householdId, input } = request.data as {
+  const { householdId, input, clientId } = request.data as {
     householdId: string
     input: FeedingInputPayload
+    /** Optional client-generated id for optimistic offline creates. */
+    clientId?: string | null
   }
   if (!householdId || !input) throw new HttpsError('invalid-argument', 'Missing fields')
 
@@ -958,14 +960,28 @@ export const createFeeding = onCall(callableOptions, async (request) => {
   await assertBabyExists(householdId, parseBabyId(input.babyId))
   const doc = feedingDocFromInput(input)
 
-  const ref = await db.collection(`households/${householdId}/feedings`).add({
+  const col = db.collection(`households/${householdId}/feedings`)
+  const feedingBody = {
     ...doc,
-    milkLotId: null,
-    milkDeductions: [],
+    milkLotId: null as string | null,
+    milkDeductions: [] as unknown[],
     lastActorUid: uid,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  })
+  }
+  let ref = col.doc()
+  if (typeof clientId === 'string' && clientId.trim().length >= 8 && clientId.trim().length <= 128) {
+    const id = clientId.trim()
+    ref = col.doc(id)
+    const existing = await ref.get()
+    if (existing.exists) {
+      // Idempotent replay from offline queue — treat as success.
+      return { feedingId: ref.id }
+    }
+    await ref.create(feedingBody)
+  } else {
+    ref = await col.add(feedingBody)
+  }
 
   let milkDeductions: MilkDeduction[] = []
   if (doc.type === 'bottle' && doc.volumeOz != null) {
