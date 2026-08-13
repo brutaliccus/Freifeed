@@ -5,28 +5,26 @@ interface PlusTenIconProps {
 
 /** Circle-friendly "+10" glyph for quick 10-minute nursing log. */
 export function PlusTenIcon({ size = 48, className = '' }: PlusTenIconProps) {
+  const fontSize = Math.round(size * 0.52)
   return (
-    <svg
+    <span
       className={`plus-ten-icon ${className}`.trim()}
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size,
+        height: size,
+        fontSize,
+        fontWeight: 700,
+        lineHeight: 1,
+        letterSpacing: '-0.06em',
+        // Optical center: "+" makes plain middle look slightly right.
+        transform: 'translateX(-1px)',
+      }}
       aria-hidden
     >
-      <text
-        x="32"
-        y="38"
-        textAnchor="middle"
-        fill="currentColor"
-        fontSize="22"
-        fontWeight="700"
-        fontFamily="system-ui, -apple-system, Segoe UI, sans-serif"
-        letterSpacing="-0.5"
-      >
-        +10
-      </text>
-    </svg>
+      +10
+    </span>
   )
 }

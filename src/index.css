@@ -1078,6 +1078,12 @@ input {
   color: var(--accent-strong);
 }
 
+.breast-circle-btn.feed-kind-btn--plus10:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .breast-circle-btn.feed-kind-btn--bottle.feed-kind-btn--active {
   border-color: color-mix(in srgb, var(--tracker-milk) 95%, transparent);
   box-shadow: 0 0 14px color-mix(in srgb, var(--tracker-milk) 38%, transparent);

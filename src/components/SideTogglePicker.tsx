@@ -12,6 +12,8 @@ interface SideTogglePickerProps {
   /** Quick +10 minute nursing log — shown after the bottle button. */
   showPlusTen?: boolean
   plusTenSelected?: boolean
+  /** Keep visible but not tappable (e.g. bottle feed selected). */
+  plusTenDisabled?: boolean
   onPlusTenSelect?: () => void
   disabled?: boolean
 }
@@ -24,6 +26,7 @@ export function SideTogglePicker({
   onBottleSelect,
   showPlusTen,
   plusTenSelected,
+  plusTenDisabled,
   onPlusTenSelect,
   disabled,
 }: SideTogglePickerProps) {
@@ -63,16 +66,16 @@ export function SideTogglePicker({
             <BottleIcon size={40} />
           </button>
         )}
-        {showPlusTen && onPlusTenSelect && (
+        {showPlusTen && (
           <button
             type="button"
-            disabled={disabled}
-            className={`breast-circle-btn breast-circle-btn--modal feed-kind-btn feed-kind-btn--plus10 side-toggle-btn${plusTenSelected && !bottleSelected ? ' feed-kind-btn--active' : ''}`}
-            onClick={onPlusTenSelect}
+            disabled={disabled || plusTenDisabled || !onPlusTenSelect}
+            className={`breast-circle-btn breast-circle-btn--modal feed-kind-btn feed-kind-btn--plus10 side-toggle-btn${plusTenSelected && !plusTenDisabled ? ' feed-kind-btn--active' : ''}`}
+            onClick={() => onPlusTenSelect?.()}
             aria-label="Quick add 10 minute nursing session"
-            aria-pressed={!!plusTenSelected && !bottleSelected}
+            aria-pressed={!!plusTenSelected && !plusTenDisabled}
           >
-            <PlusTenIcon size={40} />
+            <PlusTenIcon size={44} />
           </button>
         )}
       </div>

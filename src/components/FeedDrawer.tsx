@@ -412,10 +412,20 @@ export function FeedDrawer({
                     }
                   : undefined
               }
-              showPlusTen={isNursing && mode === 'active' && !sessionStarted}
+              showPlusTen={
+                isNursing &&
+                mode === 'active' &&
+                !draft.feedingId &&
+                !timerRunning &&
+                !timerPaused
+              }
               plusTenSelected={quickTenSelected}
               onPlusTenSelect={
-                isNursing && mode === 'active' && !sessionStarted
+                isNursing &&
+                mode === 'active' &&
+                !draft.feedingId &&
+                !timerRunning &&
+                !timerPaused
                   ? () => {
                       setError(null)
                       setQuickTenSelected((prev) => !prev)
@@ -430,11 +440,17 @@ export function FeedDrawer({
               sides={draft.sides}
               onChange={(sides) => {
                 setQuickTenSelected(false)
+                // Clear bottle draft times so nursing "Start Session" / +10 work again.
                 onDraftChange({
                   kind: 'nursing',
                   sides,
                   side: sidesToNursingSide(sides),
                   volumeOz: '',
+                  startTime: '',
+                  endTime: '',
+                  timerStartedAt: null,
+                  awaitingVolume: false,
+                  bottleMilkDeductions: [],
                 })
               }}
               showBottle
@@ -446,26 +462,16 @@ export function FeedDrawer({
                   sides: [],
                   side: null,
                   volumeOz: '',
+                  startTime: '',
+                  endTime: '',
+                  timerStartedAt: null,
+                  awaitingVolume: false,
+                  bottleMilkDeductions: [],
                 })
               }}
-              showPlusTen={mode === 'active' && !sessionStarted}
+              showPlusTen={mode === 'active' && !draft.feedingId}
               plusTenSelected={false}
-              onPlusTenSelect={
-                mode === 'active' && !sessionStarted
-                  ? () => {
-                      setError(null)
-                      setQuickTenSelected(true)
-                      onDraftChange({
-                        kind: 'nursing',
-                        sides: [],
-                        side: null,
-                        volumeOz: '',
-                        timerStartedAt: null,
-                        awaitingVolume: false,
-                      })
-                    }
-                  : undefined
-              }
+              plusTenDisabled
             />
           )}
 
