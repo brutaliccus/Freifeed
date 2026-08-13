@@ -6,7 +6,6 @@ import { DatePickerField } from './DatePickerField'
 import { FeedDateButton } from './FeedDateButton'
 import { TimePickerField } from './TimePickerField'
 import { PumpIcon } from './PumpIcon'
-import { PlusTenIcon } from './PlusTenIcon'
 import { PumpVolumePrompt } from './PumpVolumePrompt'
 import { BottleMilkSourceSheet } from './BottleMilkSourceSheet'
 import { SideTogglePicker } from './SideTogglePicker'
@@ -387,32 +386,6 @@ export function FeedDrawer({
             >
               <PumpIcon size={68} />
             </button>
-            {mode === 'active' && !sessionStarted && (
-              <button
-                type="button"
-                className={`breast-circle-btn breast-circle-btn--modal feed-kind-btn feed-kind-btn--plus10${quickTenSelected && isNursing ? ' feed-kind-btn--active' : ''}`}
-                onClick={() => {
-                  setError(null)
-                  if (quickTenSelected && isNursing) {
-                    setQuickTenSelected(false)
-                    return
-                  }
-                  setQuickTenSelected(true)
-                  if (!isNursing) {
-                    onDraftChange({
-                      kind: 'nursing',
-                      volumeOz: '',
-                      timerStartedAt: null,
-                      awaitingVolume: false,
-                    })
-                  }
-                }}
-                aria-label="Quick add 10 minute nursing session"
-                aria-pressed={quickTenSelected && isNursing}
-              >
-                <PlusTenIcon size={52} />
-              </button>
-            )}
           </div>
 
           {!isBottle && (
@@ -424,6 +397,7 @@ export function FeedDrawer({
               onBottleSelect={
                 isNursing
                   ? () => {
+                      setQuickTenSelected(false)
                       const now = format(new Date(), 'HH:mm')
                       onDraftChange({
                         kind: 'bottle',
@@ -438,29 +412,59 @@ export function FeedDrawer({
                     }
                   : undefined
               }
+              showPlusTen={isNursing && mode === 'active' && !sessionStarted}
+              plusTenSelected={quickTenSelected}
+              onPlusTenSelect={
+                isNursing && mode === 'active' && !sessionStarted
+                  ? () => {
+                      setError(null)
+                      setQuickTenSelected((prev) => !prev)
+                    }
+                  : undefined
+              }
             />
           )}
 
           {isBottle && (
             <SideTogglePicker
               sides={draft.sides}
-              onChange={(sides) =>
+              onChange={(sides) => {
+                setQuickTenSelected(false)
                 onDraftChange({
                   kind: 'nursing',
                   sides,
                   side: sidesToNursingSide(sides),
                   volumeOz: '',
                 })
-              }
+              }}
               showBottle
               bottleSelected
-              onBottleSelect={() =>
+              onBottleSelect={() => {
+                setQuickTenSelected(false)
                 onDraftChange({
                   kind: 'nursing',
                   sides: [],
                   side: null,
                   volumeOz: '',
                 })
+              }}
+              showPlusTen={mode === 'active' && !sessionStarted}
+              plusTenSelected={false}
+              onPlusTenSelect={
+                mode === 'active' && !sessionStarted
+                  ? () => {
+                      setError(null)
+                      setQuickTenSelected(true)
+                      onDraftChange({
+                        kind: 'nursing',
+                        sides: [],
+                        side: null,
+                        volumeOz: '',
+                        timerStartedAt: null,
+                        awaitingVolume: false,
+                      })
+                    }
+                  : undefined
               }
             />
           )}

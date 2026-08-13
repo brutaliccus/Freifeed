@@ -3525,8 +3525,7 @@ input {
   transition: opacity 0.15s ease;
 }
 
-.feed-drawer .baby-picker-row .feed-kind-btn--pump,
-.feed-drawer .baby-picker-row .feed-kind-btn--plus10 {
+.feed-drawer .baby-picker-row .feed-kind-btn--pump {
   width: 96px;
   height: 96px;
   flex-shrink: 0;
@@ -3538,7 +3537,7 @@ input {
   max-height: 4.25rem;
 }
 
-.feed-drawer .baby-picker-row .feed-kind-btn--plus10 .plus-ten-icon {
+.feed-drawer .side-picker__btns .feed-kind-btn--plus10 .plus-ten-icon {
   display: block;
 }
 
