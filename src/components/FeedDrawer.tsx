@@ -6,6 +6,7 @@ import { DatePickerField } from './DatePickerField'
 import { FeedDateButton } from './FeedDateButton'
 import { TimePickerField } from './TimePickerField'
 import { PumpIcon } from './PumpIcon'
+import { PlusTenIcon } from './PlusTenIcon'
 import { PumpVolumePrompt } from './PumpVolumePrompt'
 import { BottleMilkSourceSheet } from './BottleMilkSourceSheet'
 import { SideTogglePicker } from './SideTogglePicker'
@@ -49,6 +50,11 @@ interface FeedDrawerProps {
   /** Background save — must apply optimistic local state and return immediately. */
   onSaveBackground: (draft: ActiveFeedDraft, input: FeedingInput) => void
   onDiscardBackground: (draft: ActiveFeedDraft) => void
+  /**
+   * Quick-log a completed nursing session of N minutes ending now (no timer).
+   * Return true when accepted; drawer will clear/close.
+   */
+  onQuickLogNursingMinutes?: (minutes: number) => boolean
   onMinimize: () => void
   onSaved: () => void
   onRefreshMilk?: () => void
@@ -77,6 +83,7 @@ export function FeedDrawer({
   onStopForSave,
   onSaveBackground,
   onDiscardBackground,
+  onQuickLogNursingMinutes,
   onMinimize,
   onSaved,
   onRefreshMilk,
@@ -100,6 +107,8 @@ export function FeedDrawer({
   const [error, setError] = useState<string | null>(null)
   const [pumpPromptOpen, setPumpPromptOpen] = useState(false)
   const [bottleSourceOpen, setBottleSourceOpen] = useState(false)
+  /** When on, Start Session logs a finished 10-minute nursing feed instead of starting a timer. */
+  const [quickTenSelected, setQuickTenSelected] = useState(false)
 
   useEffect(() => {
     sideSuggestionApplied.current = false
@@ -285,6 +294,21 @@ export function FeedDrawer({
   const handleFooterAction = async () => {
     if (showStartSession) {
       setError(null)
+      if (quickTenSelected) {
+        if (draft.sides.length === 0 && !draft.side) {
+          setError('Select a side before logging 10 minutes')
+          return
+        }
+        if (!onQuickLogNursingMinutes?.(10)) {
+          setError('Could not log 10 minute session')
+          return
+        }
+        setQuickTenSelected(false)
+        onClearSession()
+        onSaved()
+        onMinimize()
+        return
+      }
       try {
         onStartTimer()
         onMinimize()
@@ -346,7 +370,8 @@ export function FeedDrawer({
               type="button"
               className={`breast-circle-btn breast-circle-btn--modal feed-kind-btn feed-kind-btn--pump${isPump ? ' feed-kind-btn--active' : ''}`}
               disabled={pumpBusy}
-              onClick={() =>
+              onClick={() => {
+                setQuickTenSelected(false)
                 onDraftChange({
                   kind: 'pump',
                   babyId: resolvePumpBabyId(babyIds),
@@ -356,12 +381,38 @@ export function FeedDrawer({
                   timerStartedAt: null,
                   awaitingVolume: false,
                 })
-              }
+              }}
               aria-label="Pump"
               aria-pressed={isPump}
             >
               <PumpIcon size={68} />
             </button>
+            {mode === 'active' && !sessionStarted && (
+              <button
+                type="button"
+                className={`breast-circle-btn breast-circle-btn--modal feed-kind-btn feed-kind-btn--plus10${quickTenSelected && isNursing ? ' feed-kind-btn--active' : ''}`}
+                onClick={() => {
+                  setError(null)
+                  if (quickTenSelected && isNursing) {
+                    setQuickTenSelected(false)
+                    return
+                  }
+                  setQuickTenSelected(true)
+                  if (!isNursing) {
+                    onDraftChange({
+                      kind: 'nursing',
+                      volumeOz: '',
+                      timerStartedAt: null,
+                      awaitingVolume: false,
+                    })
+                  }
+                }}
+                aria-label="Quick add 10 minute nursing session"
+                aria-pressed={quickTenSelected && isNursing}
+              >
+                <PlusTenIcon size={52} />
+              </button>
+            )}
           </div>
 
           {!isBottle && (
@@ -621,10 +672,14 @@ export function FeedDrawer({
           >
             {saving
               ? showStartSession
-                ? 'Starting…'
+                ? quickTenSelected
+                  ? 'Logging…'
+                  : 'Starting…'
                 : 'Saving…'
               : showStartSession
-                ? 'Start Session'
+                ? quickTenSelected
+                  ? 'Log 10 min'
+                  : 'Start Session'
                 : showStopAndSave
                   ? 'Stop and Save'
                   : 'Save'}

@@ -417,6 +417,54 @@ export function useActiveFeedSessions(
     [householdId, patchSession],
   )
 
+  /**
+   * Log a completed nursing session of `minutes` ending now (no live timer).
+   * Removes the draft session afterward — caller should close the drawer.
+   */
+  const quickLogNursingMinutes = useCallback(
+    (sessionId: string, minutes: number): boolean => {
+      const current = sessionsRef.current.find((s) => s.sessionId === sessionId)
+      if (!current || !householdId || current.kind !== 'nursing') return false
+      const side = sidesToNursingSide(current.sides) ?? current.side
+      if (!side && current.sides.length === 0) return false
+      if (!Number.isFinite(minutes) || minutes <= 0) return false
+
+      const endAt = new Date()
+      const startAt = new Date(endAt.getTime() - Math.round(minutes * 60_000))
+      const draft: ActiveFeedDraft = {
+        ...current,
+        startTime: format(startAt, 'HH:mm'),
+        endTime: format(endAt, 'HH:mm'),
+        defaultDate: format(startAt, 'yyyy-MM-dd'),
+        timerStartedAt: null,
+        timerAccumulatedSec: 0,
+        timerPaused: false,
+        awaitingVolume: false,
+      }
+      const input = draftToInput(draft)
+      input.startAt = startAt
+      input.endAt = endAt
+      input.volumeOz = null
+      input.milkStorage = null
+
+      if (current.feedingId) {
+        updateFeedingOptimistic(householdId, current.feedingId, input, {
+          onOptimistic: () => optimisticRef.current?.patch(current.feedingId!, input),
+        })
+        markFeedingOwnedByThisDevice(current.feedingId)
+      } else {
+        const feedingId = createFeedingOptimistic(householdId, input, {
+          onOptimistic: (feeding) => optimisticRef.current?.upsert(feeding),
+        })
+        markFeedingOwnedByThisDevice(feedingId)
+      }
+
+      persist((prev) => prev.filter((s) => s.sessionId !== sessionId))
+      return true
+    },
+    [householdId, persist],
+  )
+
   const discardDraftBackground = useCallback(
     (draft: ActiveFeedDraft) => {
       if (!householdId || !draft.feedingId) return
@@ -483,5 +531,6 @@ export function useActiveFeedSessions(
     notifySaved,
     saveDraftBackground,
     discardDraftBackground,
+    quickLogNursingMinutes,
   }
 }

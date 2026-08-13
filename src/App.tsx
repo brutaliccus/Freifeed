@@ -1136,6 +1136,10 @@ function App() {
           onDiscardBackground={(draft) => {
             feedSessions.discardDraftBackground(draft)
           }}
+          onQuickLogNursingMinutes={(minutes) => {
+            if (!drawerSessionId) return false
+            return feedSessions.quickLogNursingMinutes(drawerSessionId, minutes)
+          }}
           onMinimize={minimizeDrawer}
           onSaved={handleSaved}
           onRefreshMilk={() => void refreshMilk()}

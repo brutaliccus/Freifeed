@@ -1032,7 +1032,8 @@ input {
 
 .breast-circle-btn.feed-kind-btn .breast-icon,
 .breast-circle-btn.feed-kind-btn .bottle-icon,
-.breast-circle-btn.feed-kind-btn .pump-icon {
+.breast-circle-btn.feed-kind-btn .pump-icon,
+.breast-circle-btn.feed-kind-btn .plus-ten-icon {
   filter: none;
 }
 
@@ -1053,6 +1054,11 @@ input {
   color: var(--tracker-pump);
 }
 
+.breast-circle-btn.feed-kind-btn--plus10 {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
 .breast-circle-btn.feed-kind-btn--bottle {
   border-color: color-mix(in srgb, var(--tracker-milk) 55%, transparent);
   color: var(--tracker-milk);
@@ -1063,6 +1069,13 @@ input {
   box-shadow: 0 0 14px color-mix(in srgb, var(--tracker-pump) 42%, transparent);
   background: transparent;
   color: var(--tracker-pump);
+}
+
+.breast-circle-btn.feed-kind-btn--plus10.feed-kind-btn--active {
+  border-color: color-mix(in srgb, var(--accent) 95%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
+  background: transparent;
+  color: var(--accent-strong);
 }
 
 .breast-circle-btn.feed-kind-btn--bottle.feed-kind-btn--active {
@@ -3512,7 +3525,8 @@ input {
   transition: opacity 0.15s ease;
 }
 
-.feed-drawer .baby-picker-row .feed-kind-btn--pump {
+.feed-drawer .baby-picker-row .feed-kind-btn--pump,
+.feed-drawer .baby-picker-row .feed-kind-btn--plus10 {
   width: 96px;
   height: 96px;
   flex-shrink: 0;
@@ -3522,6 +3536,10 @@ input {
 
 .feed-drawer .baby-picker-row .feed-kind-btn--pump .pump-icon svg {
   max-height: 4.25rem;
+}
+
+.feed-drawer .baby-picker-row .feed-kind-btn--plus10 .plus-ten-icon {
+  display: block;
 }
 
 .feed-drawer .baby-picker-row .feed-kind-btn--active {
