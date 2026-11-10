@@ -83,4 +83,4 @@ Partner nursing push is wired as a **no-op with a one-time log** when `FCM_*` / 
 
 - `7d7f113` — Add Pi SQLite/Fastify backend with Docker, SSE, and export/import.
 - `1240046` — Rewire client for VITE_API_BASE and fix sync/milk expiry bugs.
-- (this file) — Phase 2 notes for parent agent.
+- `347cd20` — Document Phase 2 architecture, ops, and deferred items.
