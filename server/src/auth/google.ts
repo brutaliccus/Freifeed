@@ -98,7 +98,7 @@ export async function authenticateWithGoogleIdToken(idToken: string): Promise<Go
   try {
     ticket = await client.verifyIdToken({
       idToken,
-      audience: config.googleWebClientId,
+      audience: config.googleClientIds,
     })
   } catch {
     throw new HttpsError('unauthenticated', 'Invalid Google ID token')
