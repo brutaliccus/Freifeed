@@ -1,0 +1,59 @@
+services:
+  freifeed-api:
+    container_name: freifeed-api
+    build:
+      context: .
+      platforms:
+        - linux/arm64
+    image: freifeed-api:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PORT: "8080"
+      HOST: "0.0.0.0"
+      DATA_DIR: /data
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_WEB_CLIENT_ID: ${GOOGLE_WEB_CLIENT_ID:-269864356157-3r1fhq0598g0asc9pl0r9h5dc4qje5n7.apps.googleusercontent.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://buba.freiverse.com}
+      FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+    env_file:
+      - path: /etc/freifeed/tunnel.env
+        required: false
+      - path: .env
+        required: false
+    volumes:
+      - freifeed-data:/data
+    networks:
+      - freifeed
+    mem_limit: 256m
+    cpus: 1.0
+
+  cloudflared:
+    container_name: freifeed-cloudflared
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    env_file:
+      - path: /etc/freifeed/tunnel.env
+        required: false
+      - path: .env
+        required: false
+    networks:
+      - freifeed
+    depends_on:
+      - freifeed-api
+    mem_limit: 128m
+    cpus: 0.5
+
+volumes:
+  freifeed-data:
+
+networks:
+  freifeed:
+    name: freifeed
+    driver: bridge
