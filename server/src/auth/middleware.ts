@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { getDb } from '../db/db.js'
 import { HttpsError, isHttpsError } from '../errors.js'
 import { verifyAuthToken } from './jwt.js'
 
@@ -18,6 +19,10 @@ export function requireAuth(request: FastifyRequest): string {
   }
   if (!token) throw new HttpsError('unauthenticated', 'Sign in required')
   const payload = verifyAuthToken(token)
+  const row = getDb().prepare('SELECT uid FROM users WHERE uid = ?').get(payload.uid)
+  if (!row) {
+    throw new HttpsError('unauthenticated', 'Session expired, please sign in again')
+  }
   request.uid = payload.uid
   return payload.uid
 }

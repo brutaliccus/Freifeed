@@ -103,6 +103,14 @@ export function useAuth() {
         void registerNativePartnerPushToken()
       }
     } catch (err) {
+      const code = authErrorCode(err)
+      if (code === 'functions/unauthenticated' || code === 'unauthenticated') {
+        clearSession()
+        setUser(null)
+        setProfile(null)
+        setApiError(null)
+        return
+      }
       console.error('Profile sync failed:', err)
       setApiError(formatApiError(err))
     }

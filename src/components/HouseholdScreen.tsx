@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Home, Users } from 'lucide-react'
+import { Home, LogOut, Users } from 'lucide-react'
 import { createHousehold, joinHousehold } from '../lib/household'
 
 interface HouseholdScreenProps {
   uid: string
   onJoined: () => void
+  onSignOut: () => void | Promise<void>
 }
 
-export function HouseholdScreen({ uid, onJoined }: HouseholdScreenProps) {
+export function HouseholdScreen({ uid, onJoined, onSignOut }: HouseholdScreenProps) {
   const [mode, setMode] = useState<'choose' | 'join'>('choose')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,6 +64,10 @@ export function HouseholdScreen({ uid, onJoined }: HouseholdScreenProps) {
           <button type="button" className="btn btn-ghost" onClick={() => setMode('choose')} disabled={loading}>
             Back
           </button>
+          <button type="button" className="btn btn-ghost sign-out-btn" onClick={onSignOut}>
+            <LogOut size={18} aria-hidden />
+            Sign out
+          </button>
           {error && <p className="error-text">{error}</p>}
         </div>
       </div>
@@ -81,6 +86,10 @@ export function HouseholdScreen({ uid, onJoined }: HouseholdScreenProps) {
         <button type="button" className="btn btn-secondary" onClick={() => setMode('join')} disabled={loading}>
           <Users size={20} aria-hidden />
           Join with code
+        </button>
+        <button type="button" className="btn btn-ghost sign-out-btn" onClick={onSignOut}>
+          <LogOut size={18} aria-hidden />
+          Sign out
         </button>
         {error && <p className="error-text">{error}</p>}
       </div>

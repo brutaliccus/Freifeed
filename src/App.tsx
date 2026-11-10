@@ -745,7 +745,7 @@ function App() {
             </button>
           </div>
         )}
-        <HouseholdScreen uid={user.uid} onJoined={handleHouseholdJoined} />
+        <HouseholdScreen uid={user.uid} onJoined={handleHouseholdJoined} onSignOut={signOut} />
         <InAppBannerStack>
           <AppWebUpdate />
         </InAppBannerStack>

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { readUserNavTrackers, defaultNavTrackers } from '../auth/google.js'
+import { readUserNavTrackers } from '../auth/google.js'
 import { getDb, nowIso, parseJson, toJson } from '../db/db.js'
 import { HttpsError } from '../errors.js'
 import { registerPushToken } from '../fcm.js'
@@ -93,21 +93,16 @@ export function registerProfileRoutes(app: FastifyInstance) {
   registerCallable(app, 'upsertUserProfile', (uid, body) => {
     const db = getDb()
     const existing = db.prepare('SELECT uid FROM users WHERE uid = ?').get(uid)
+    if (!existing) {
+      throw new HttpsError('unauthenticated', 'Session expired, please sign in again')
+    }
     const email = (body.email as string | null | undefined) ?? null
     const displayName = (body.displayName as string | null | undefined) ?? null
     const photoURL = (body.photoURL as string | null | undefined) ?? null
     const now = nowIso()
-    if (existing) {
-      db.prepare(
-        'UPDATE users SET email=?, display_name=?, photo_url=?, updated_at=? WHERE uid=?',
-      ).run(email, displayName, photoURL, now, uid)
-    } else {
-      db.prepare(
-        `INSERT INTO users (uid, email, display_name, photo_url, household_id,
-          skipped_baby_onboarding, skipped_photo_onboarding, nav_trackers, fcm_tokens, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, 0, 0, ?, '[]', ?, ?)`,
-      ).run(uid, email, displayName, photoURL, toJson(defaultNavTrackers()), now, now)
-    }
+    db.prepare(
+      'UPDATE users SET email=?, display_name=?, photo_url=?, updated_at=? WHERE uid=?',
+    ).run(email, displayName, photoURL, now, uid)
     return { ok: true }
   })
 
