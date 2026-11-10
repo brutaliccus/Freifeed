@@ -13,6 +13,9 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
+
+// Always initialize (shared module graph). In API mode (VITE_API_BASE) we never
+// attach Firestore listeners or call Functions — see householdSubscriptions / api.ts.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),
@@ -20,3 +23,5 @@ export const db = initializeFirestore(app, {
 })
 export const functions = getFunctions(app, 'us-central1')
 export const googleProvider = new GoogleAuthProvider()
+googleProvider.addScope('email')
+googleProvider.addScope('profile')

@@ -11,6 +11,7 @@ import {
 } from '../lib/nativeNotifications'
 import { syncMilkExpirationToServiceWorker } from '../lib/milkExpirationNotifications'
 import { usesNativeNotifications } from '../lib/notificationPlatform'
+import { wasMilkLotRecentlyRemoved } from '../lib/milkInventoryLocal'
 import type { MilkLot } from '../types'
 
 function alarmSignature(alarms: ReturnType<typeof buildMilkExpirationAlarms>): string {
@@ -76,23 +77,27 @@ export function useMilkExpirationNotifications({
         return
       }
 
-      const alarms = buildMilkExpirationAlarms(lots)
+      // Skip depleted / recently removed bags so stale "Milk expired!" never fires.
+      const activeLots = lots.filter(
+        (l) => l.remainingOz > 0 && !wasMilkLotRecentlyRemoved(l.id),
+      )
+      const alarms = buildMilkExpirationAlarms(activeLots)
       const scheduleSig = alarmSignature(alarms)
       const dueSig = dueAlarmSignature(alarms)
 
       if (native) {
         if (scheduleSig !== lastScheduleSignatureRef.current) {
           lastScheduleSignatureRef.current = scheduleSig
-          await syncNativeMilkExpirationSchedule(lots)
+          await syncNativeMilkExpirationSchedule(activeLots)
         }
         if (dueSig !== lastDueSignatureRef.current) {
           lastDueSignatureRef.current = dueSig
-          await fireNativeMilkExpirationDueAlerts(lots)
+          await fireNativeMilkExpirationDueAlerts(activeLots)
         }
       } else {
         lastScheduleSignatureRef.current = scheduleSig
         lastDueSignatureRef.current = dueSig
-        await syncMilkExpirationToServiceWorker(lots)
+        await syncMilkExpirationToServiceWorker(activeLots)
       }
     }
 

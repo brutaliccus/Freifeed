@@ -1,8 +1,8 @@
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '../firebase'
-import { withCallableRetry, isTransientCallableError } from './callableRetry'
+import { invokeBackend } from './apiTransport'
+import { isPermanentCallableError, isTransientCallableError } from './callableRetry'
 import {
   enqueueMutation,
+  enqueueFailedMutation,
   flushOfflineQueue,
   isLikelyOfflineError,
   pendingCoalesceKeys,
@@ -11,7 +11,7 @@ import {
 export type MutationResult = { ok: true; queued: boolean }
 
 export type RunMutationOptions = {
-  /** Firebase callable name. */
+  /** Firebase callable / API route name. */
   name: string
   payload: unknown
   /** Replace any prior queued item with this key. */
@@ -67,11 +67,8 @@ export function subscribePendingMutations(listener: () => void): () => void {
 }
 
 async function executeCallable(name: string, payload: unknown): Promise<unknown> {
-  return withCallableRetry(async () => {
-    const fn = httpsCallable(functions, name)
-    const res = await fn(payload as Record<string, unknown>)
-    return res.data
-  })
+  const res = await invokeBackend<unknown, unknown>(name, payload)
+  return res.data
 }
 
 export async function flushPendingMutations(): Promise<void> {
@@ -95,6 +92,35 @@ export async function flushPendingMutations(): Promise<void> {
 
 function isOnline(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
+}
+
+function failureDetail(name: string, coalesceKey: string | undefined, err: unknown) {
+  return {
+    name,
+    coalesceKey,
+    message:
+      err && typeof err === 'object' && 'message' in err
+        ? String((err as { message: string }).message)
+        : 'Sync failed',
+  }
+}
+
+function recordPermanentFailure(
+  name: string,
+  payload: unknown,
+  coalesceKey: string | undefined,
+  err: unknown,
+): void {
+  const message =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message: string }).message)
+      : 'Sync failed'
+  enqueueFailedMutation(name, payload, message, { coalesceKey })
+  window.dispatchEvent(
+    new CustomEvent('freifeed-mutation-failed', {
+      detail: failureDetail(name, coalesceKey, err),
+    }),
+  )
 }
 
 /**
@@ -136,20 +162,18 @@ export function runMutation(options: RunMutationOptions): MutationResult {
       }
       clearPending(coalesceKey)
       console.warn(`Mutation ${name} failed permanently`, err)
-      window.dispatchEvent(
-        new CustomEvent('freifeed-mutation-failed', {
-          detail: {
-            name,
-            coalesceKey,
-            message:
-              err && typeof err === 'object' && 'message' in err
-                ? String((err as { message: string }).message)
-                : 'Sync failed',
-          },
-        }),
-      )
-      // Still resolve ok for UI — local optimistic state stays; user can retry via banner.
-      enqueueMutation(name, payload, { coalesceKey })
+      // Permanent: surface once in failed queue — do not retry 12 times.
+      if (isPermanentCallableError(err)) {
+        recordPermanentFailure(name, payload, coalesceKey, err)
+      } else {
+        // Unknown errors: one queued attempt via normal enqueue (flush will classify).
+        enqueueMutation(name, payload, { coalesceKey })
+        window.dispatchEvent(
+          new CustomEvent('freifeed-mutation-failed', {
+            detail: failureDetail(name, coalesceKey, err),
+          }),
+        )
+      }
       return finishOk(true)
     } finally {
       if (coalesceKey) inFlightKeys.delete(coalesceKey)
@@ -163,7 +187,6 @@ export function runMutation(options: RunMutationOptions): MutationResult {
     return { ok: true, queued: !isOnline() }
   }
 
-  // Synchronous path (rare): still returns a promise-shaped result via blocking — not used by UI.
   void dispatch()
   return { ok: true, queued: !isOnline() }
 }
@@ -193,7 +216,11 @@ export async function runMutationAsync(options: RunMutationOptions): Promise<Mut
       enqueueMutation(name, payload, { coalesceKey })
       return { ok: true, queued: true }
     }
-    enqueueMutation(name, payload, { coalesceKey })
+    if (isPermanentCallableError(err)) {
+      recordPermanentFailure(name, payload, coalesceKey, err)
+    } else {
+      enqueueMutation(name, payload, { coalesceKey })
+    }
     return { ok: true, queued: true }
   } finally {
     if (coalesceKey) inFlightKeys.delete(coalesceKey)

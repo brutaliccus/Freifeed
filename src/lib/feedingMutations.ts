@@ -1,7 +1,13 @@
 import { Timestamp } from 'firebase/firestore'
 import { inputToPayload, type FeedingInput } from './api'
 import { runMutation, newClientId, isMutationPending } from './mutationQueue'
-import type { Feeding } from '../types'
+import {
+  optimisticAddOzToLot,
+  optimisticApplyMilkDeductions,
+  optimisticRemoveMilkLotIds,
+  optimisticUpsertMilkLot,
+} from './milkInventoryLocal'
+import type { Feeding, MilkLot } from '../types'
 
 export function feedingCoalesceKey(
   op: 'create' | 'update' | 'delete',
@@ -44,6 +50,52 @@ export function feedingFromInput(
   }
 }
 
+function applyMilkSideEffectsOptimistic(householdId: string, feedingId: string, input: FeedingInput) {
+  if (input.type === 'bottle' && input.milkDeductions && input.milkDeductions.length > 0) {
+    optimisticApplyMilkDeductions(householdId, input.milkDeductions)
+  }
+  if (input.type === 'pump' && input.volumeOz != null && input.endAt && input.milkStorage) {
+    const pumpedAt = input.startAt ?? input.endAt
+    const storedAt = input.storedAt ?? pumpedAt
+    if (input.addToLotId) {
+      optimisticAddOzToLot(householdId, input.addToLotId, input.volumeOz)
+      return
+    }
+    if (input.milkBagVolumes && input.milkBagVolumes.length > 0) {
+      for (let i = 0; i < input.milkBagVolumes.length; i++) {
+        const vol = input.milkBagVolumes[i]!
+        const lot: MilkLot = {
+          id: newClientId(),
+          pumpedAt: Timestamp.fromDate(pumpedAt),
+          storedAt: Timestamp.fromDate(storedAt),
+          volumeOz: vol,
+          remainingOz: vol,
+          storage: input.milkStorage,
+          feedingId: i === 0 ? feedingId : null,
+          note: input.note,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        }
+        optimisticUpsertMilkLot(householdId, lot)
+      }
+      return
+    }
+    const lot: MilkLot = {
+      id: newClientId(),
+      pumpedAt: Timestamp.fromDate(pumpedAt),
+      storedAt: Timestamp.fromDate(storedAt),
+      volumeOz: input.volumeOz,
+      remainingOz: input.volumeOz,
+      storage: input.milkStorage,
+      feedingId,
+      note: input.note,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    }
+    optimisticUpsertMilkLot(householdId, lot)
+  }
+}
+
 /** Optimistic create — returns client id immediately; syncs in background. */
 export function createFeedingOptimistic(
   householdId: string,
@@ -63,7 +115,10 @@ export function createFeedingOptimistic(
       clientId: feedingId,
     },
     coalesceKey: feedingCoalesceKey('create', feedingId),
-    optimistic: () => options.onOptimistic(feeding),
+    optimistic: () => {
+      options.onOptimistic(feeding)
+      applyMilkSideEffectsOptimistic(householdId, feedingId, input)
+    },
   })
   return feedingId
 }
@@ -84,7 +139,10 @@ export function updateFeedingOptimistic(
       input: inputToPayload(input),
     },
     coalesceKey: feedingCoalesceKey('update', feedingId),
-    optimistic: () => options.onOptimistic({ ...input, feedingId }),
+    optimistic: () => {
+      options.onOptimistic({ ...input, feedingId })
+      applyMilkSideEffectsOptimistic(householdId, feedingId, input)
+    },
   })
 }
 
@@ -93,13 +151,20 @@ export function deleteFeedingOptimistic(
   feedingId: string,
   options: {
     onOptimistic: () => void
+    /** Optional milk lot ids to remove locally (pump lot linked to this feeding). */
+    milkLotIds?: string[]
   },
 ): void {
   runMutation({
     name: 'deleteFeeding',
     payload: { householdId, feedingId },
     coalesceKey: feedingCoalesceKey('delete', feedingId),
-    optimistic: () => options.onOptimistic(),
+    optimistic: () => {
+      options.onOptimistic()
+      if (options.milkLotIds?.length) {
+        optimisticRemoveMilkLotIds(householdId, options.milkLotIds)
+      }
+    },
   })
 }
 

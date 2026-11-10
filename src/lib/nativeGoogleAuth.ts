@@ -3,6 +3,8 @@ import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth'
 import { auth } from '../firebase'
 import { GOOGLE_WEB_CLIENT_ID } from './googleClientId'
 import { isNativeCapacitor } from './platform'
+import { isApiMode } from './apiMode'
+import { exchangeGoogleIdToken } from './sessionAuth'
 
 let initialized = false
 
@@ -47,6 +49,10 @@ export async function signInWithGoogleNative(): Promise<void> {
       throw new Error(
         'Google sign-in did not return an ID token. Add the debug SHA-1 in Firebase and rebuild.',
       )
+    }
+    if (isApiMode()) {
+      await exchangeGoogleIdToken(idToken)
+      return
     }
     const credential = GoogleAuthProvider.credential(idToken)
     await signInWithCredential(auth, credential)

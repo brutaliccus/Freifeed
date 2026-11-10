@@ -1,3 +1,5 @@
+import { isPermanentCallableError, isTransientCallableError } from './callableRetry'
+
 const QUEUE_KEY = 'freifeed_offline_queue_v1'
 const MAX_RETRIES = 12
 
@@ -44,6 +46,11 @@ export function getFailedQueueCount(): number {
   return readQueue().filter((q) => q.retries >= MAX_RETRIES).length
 }
 
+/** Failed items with name + lastError for the sync banner. */
+export function getFailedQueueItems(): QueuedMutation[] {
+  return readQueue().filter((q) => q.retries >= MAX_RETRIES)
+}
+
 export function enqueueMutation(
   name: string,
   payload: unknown,
@@ -61,6 +68,31 @@ export function enqueueMutation(
     createdAt: Date.now(),
     retries: 0,
     coalesceKey,
+  }
+  writeQueue([...queue, item])
+  return item
+}
+
+/** Record a permanent failure so the banner can show name + error without retrying. */
+export function enqueueFailedMutation(
+  name: string,
+  payload: unknown,
+  lastError: string,
+  options?: { coalesceKey?: string },
+): QueuedMutation {
+  const coalesceKey = options?.coalesceKey
+  let queue = readQueue()
+  if (coalesceKey) {
+    queue = queue.filter((q) => q.coalesceKey !== coalesceKey)
+  }
+  const item: QueuedMutation = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    name,
+    payload,
+    createdAt: Date.now(),
+    retries: MAX_RETRIES,
+    coalesceKey,
+    lastError,
   }
   writeQueue([...queue, item])
   return item
@@ -84,19 +116,8 @@ export function pendingCoalesceKeys(): Set<string> {
 
 export function isLikelyOfflineError(err: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true
-  const code =
-    err && typeof err === 'object' && 'code' in err
-      ? String((err as { code: string }).code)
-      : ''
-  return (
-    code === 'functions/unavailable' ||
-    code === 'functions/deadline-exceeded' ||
-    code === 'functions/internal' ||
-    code === 'functions/cancelled' ||
-    code === 'functions/resource-exhausted' ||
-    code === 'unavailable' ||
-    code === 'deadline-exceeded'
-  )
+  if (isPermanentCallableError(err)) return false
+  return isTransientCallableError(err)
 }
 
 function errorMessage(err: unknown): string {
@@ -124,7 +145,8 @@ export async function flushOfflineQueue(execute: CallableExecutor): Promise<{
       flushed++
     } catch (err) {
       failed++
-      const nextRetries = item.retries + 1
+      // Permanent errors fail immediately — do not burn 12 retries.
+      const nextRetries = isPermanentCallableError(err) ? MAX_RETRIES : item.retries + 1
       const next = readQueue().map((q) =>
         q.id === item.id
           ? { ...q, retries: nextRetries, lastError: errorMessage(err) }
@@ -132,7 +154,7 @@ export async function flushOfflineQueue(execute: CallableExecutor): Promise<{
       )
       writeQueue(next)
       // Offline / transient: stop this flush pass (likely more will fail).
-      if (isLikelyOfflineError(err)) break
+      if (isLikelyOfflineError(err) || isTransientCallableError(err)) break
       // Permanent error: keep going so other mutations can sync.
     }
   }

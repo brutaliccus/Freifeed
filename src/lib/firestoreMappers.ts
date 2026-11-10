@@ -33,6 +33,11 @@ function tsOrNull(value: unknown): Timestamp | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Timestamp.fromMillis(value)
   }
+  // API mode returns ISO-8601 strings from the Pi backend.
+  if (typeof value === 'string' && value.length > 0) {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return Timestamp.fromDate(d)
+  }
   return null
 }
 

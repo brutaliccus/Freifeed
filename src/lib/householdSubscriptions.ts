@@ -13,6 +13,11 @@ import {
   type QuerySnapshot,
 } from 'firebase/firestore'
 import { db } from '../firebase'
+import { isApiMode } from './apiMode'
+import {
+  destroyApiHouseholdSubscriptions,
+  subscribeApiHouseholdCollection,
+} from './apiSubscriptions'
 import { DEFAULT_SINCE_DAYS, MAX_LIST_LIMIT, sinceDate } from './listQueryClient'
 
 /**
@@ -43,6 +48,11 @@ function docRevision(data: DocumentData, orderField: string): string {
     orderFieldMs(data, 'scheduledAt'),
     orderFieldMs(data, 'changedAt'),
     orderFieldMs(data, 'storedAt'),
+    // Volume/storage/note must invalidate so milk edits are not dropped.
+    data.remainingOz ?? '',
+    data.storage ?? '',
+    data.volumeOz ?? '',
+    data.note ?? '',
   ]
   return parts.join(':')
 }
@@ -73,6 +83,10 @@ export function mappedItemRevision(
     ts('scheduledAt'),
     ts('changedAt'),
     ts('storedAt'),
+    o.remainingOz ?? '',
+    o.storage ?? '',
+    o.volumeOz ?? '',
+    o.note ?? '',
   ].join(':')
 }
 
@@ -102,8 +116,9 @@ export function clearPinnedSinceBoundaries(householdId?: string): void {
   }
 }
 
-/** Drop all Firestore listeners for a household (call on sign-out). */
+/** Drop all Firestore / API listeners for a household (call on sign-out). */
 export function destroyHouseholdSubscriptions(householdId?: string): void {
+  destroyApiHouseholdSubscriptions(householdId)
   for (const [key, entry] of entries) {
     if (!householdId || key.startsWith(`${householdId}::`)) {
       entry.unsub()
@@ -161,6 +176,19 @@ export function subscribeHouseholdCollection(
   sinceDays: number | null = DEFAULT_SINCE_DAYS,
   remainingOzAbove: number | null = null,
 ): () => void {
+  if (isApiMode()) {
+    return subscribeApiHouseholdCollection(
+      householdId,
+      collectionName,
+      orderByField,
+      limitCount,
+      onData,
+      onError,
+      remainingOzAbove != null ? null : sinceDays,
+      remainingOzAbove,
+    )
+  }
+
   // remainingOz filter cannot combine with a date inequality on another field.
   const sinceMs =
     remainingOzAbove != null

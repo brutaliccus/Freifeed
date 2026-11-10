@@ -10,6 +10,13 @@ import {
   apiRedistributeMilkLot,
 } from './api'
 import { runMutation } from './mutationQueue'
+import {
+  optimisticCombineMilkLots,
+  optimisticDeleteMilkLot,
+  optimisticRedistributeMilkLot,
+  optimisticTransferMilkLots,
+  optimisticUpdateMilkLot,
+} from './milkInventoryLocal'
 import type { MilkLot, MilkSummary } from '../types'
 
 export function computeMilkSummary(lots: MilkLot[]): MilkSummary {
@@ -79,6 +86,7 @@ export function transferMilkLotsToFreezerBackground(
     name: 'transferMilkLotToFreezer',
     payload: { householdId, lotIds, bags },
     coalesceKey: `transferFreezer:${key}`,
+    optimistic: () => optimisticTransferMilkLots(householdId, lotIds, bags, 'frozen'),
   })
 }
 
@@ -92,6 +100,7 @@ export function transferMilkLotsToFridgeBackground(
     name: 'transferMilkLotToFridge',
     payload: { householdId, lotIds, bags },
     coalesceKey: `transferFridge:${key}`,
+    optimistic: () => optimisticTransferMilkLots(householdId, lotIds, bags, 'fridge'),
   })
 }
 
@@ -116,6 +125,7 @@ export function updateMilkLotBackground(
       ...(payload.storedAt != null ? { storedAt: payload.storedAt.toISOString() } : {}),
     },
     coalesceKey: `updateMilkLot:${lotId}`,
+    optimistic: () => optimisticUpdateMilkLot(householdId, lotId, payload),
   })
 }
 
@@ -124,6 +134,7 @@ export function deleteMilkLotBackground(householdId: string, lotId: string): voi
     name: 'deleteMilkLot',
     payload: { householdId, lotId },
     coalesceKey: `deleteMilkLot:${lotId}`,
+    optimistic: () => optimisticDeleteMilkLot(householdId, lotId),
   })
 }
 
@@ -137,6 +148,7 @@ export function combineMilkLotsBackground(
     name: 'combineMilkLots',
     payload: { householdId, lotIds, addOz: addOz ?? null },
     coalesceKey: `combineMilk:${key}`,
+    optimistic: () => optimisticCombineMilkLots(householdId, lotIds, addOz),
   })
 }
 
@@ -150,6 +162,7 @@ export function redistributeMilkLotBackground(
     name: 'redistributeMilkLot',
     payload: { householdId, lotIds, bags },
     coalesceKey: `redistributeMilk:${key}`,
+    optimistic: () => optimisticRedistributeMilkLot(householdId, lotIds, bags),
   })
 }
 

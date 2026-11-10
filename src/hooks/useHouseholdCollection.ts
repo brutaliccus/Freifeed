@@ -39,6 +39,8 @@ export interface HouseholdCollectionResult<T> {
   error: string | null
   loadMore: () => Promise<void>
   refresh: () => void
+  /** Patch live collection immediately (optimistic milk / feed side-effects). */
+  applyLocal: (updater: (prev: T[]) => T[]) => void
 }
 
 function mergeById<T extends { id: string }>(live: T[], older: T[]): T[] {
@@ -298,6 +300,19 @@ export function useHouseholdCollection<T extends { id: string }>(
   ])
 
   const refresh = useCallback(() => {}, [])
+
+  const applyLocal = useCallback((updater: (prev: T[]) => T[]) => {
+    hasServerSnapshotRef.current = true
+    setLiveData((prev) => {
+      const next = updater(prev)
+      if (activeHouseholdRef.current) {
+        scheduleCacheWrite(activeHouseholdRef.current, next)
+      }
+      return next
+    })
+    setLoading(false)
+  }, [scheduleCacheWrite])
+
   const data = useMemo(() => {
     const merged = mergeById(liveData, olderData)
     return merged.sort(
@@ -306,5 +321,15 @@ export function useHouseholdCollection<T extends { id: string }>(
     )
   }, [liveData, olderData])
 
-  return { data, loading, loadingMore, hasMore, daysLoaded, error, loadMore, refresh }
+  return {
+    data,
+    loading,
+    loadingMore,
+    hasMore,
+    daysLoaded,
+    error,
+    loadMore,
+    refresh,
+    applyLocal,
+  }
 }

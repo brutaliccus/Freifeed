@@ -44,6 +44,16 @@ tmp-*.svg
 # Local signing material (never commit)
 .secrets/
 
+# Pi backend / local data / dumps
+server/data/
+server/dist/
+server/.env
+export/
+*.db
+*.sqlite
+*.sqlite3
+**/backups/
+
 # Python
 **/__pycache__/
 *.py[cod]

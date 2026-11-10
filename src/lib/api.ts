@@ -1,7 +1,5 @@
-import { httpsCallable } from 'firebase/functions'
 import { Timestamp } from 'firebase/firestore'
-import { functions } from '../firebase'
-import { withCallableRetry } from './callableRetry'
+import { invokeBackend } from './apiTransport'
 import { enqueueMutation, isLikelyOfflineError } from './offlineQueue'
 import type {
   Baby,
@@ -34,21 +32,21 @@ function isoToTimestamp(iso: string | null | undefined): Timestamp | null {
 }
 
 function call<TReq, TRes>(name: string, options?: { queueOnFailure?: boolean }) {
-  const fn = httpsCallable<TReq, TRes>(functions, name)
   return async (payload?: TReq) => {
-    return withCallableRetry(async () => {
-      try {
-        return await fn(payload as TReq)
-      } catch (err) {
-        if (options?.queueOnFailure !== false && isLikelyOfflineError(err)) {
-          enqueueMutation(name, payload)
-        }
-        throw err
+    try {
+      return await invokeBackend<TReq, TRes>(name, payload)
+    } catch (err) {
+      // Offline queue for direct mutate() callers only. runMutation/mutationQueue
+      // owns queuing for optimistic paths — do not dual-enqueue there.
+      if (options?.queueOnFailure !== false && isLikelyOfflineError(err)) {
+        enqueueMutation(name, payload)
       }
-    })
+      throw err
+    }
   }
 }
 
+// Reads never queue. Mutates queue only on genuine offline/transient errors.
 const mutate = <TReq, TRes>(name: string) => call<TReq, TRes>(name, { queueOnFailure: true })
 const read = <TReq, TRes>(name: string) => call<TReq, TRes>(name, { queueOnFailure: false })
 
