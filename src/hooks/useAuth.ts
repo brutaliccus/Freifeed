@@ -66,6 +66,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [signingIn, setSigningIn] = useState(false)
 
   const handleFirebaseUser = useCallback(async (firebaseUser: User | null) => {
     setUser(firebaseUser)
@@ -167,6 +168,7 @@ export function useAuth() {
 
   const signIn = async () => {
     setAuthError(null)
+    setSigningIn(true)
     const native = isNativeCapacitor()
     try {
       if (native) {
@@ -193,16 +195,25 @@ export function useAuth() {
       await signInWithPopup(auth, googleProvider)
     } catch (err) {
       const code = authErrorCode(err)
-      if (code === 'auth/popup-closed-by-user') return
+      if (code === 'auth/popup-closed-by-user') {
+        setAuthError('Sign-in was cancelled.')
+        return
+      }
       if (native) {
-        setAuthError(err instanceof Error ? err.message : 'Google sign-in failed')
+        setAuthError(err instanceof Error ? err.message : formatApiError(err))
         return
       }
       if (code === 'auth/popup-blocked') {
-        await signInWithRedirect(auth, googleProvider)
+        try {
+          await signInWithRedirect(auth, googleProvider)
+        } catch (redirectErr) {
+          setAuthError(formatApiError(redirectErr))
+        }
         return
       }
-      throw err
+      setAuthError(formatApiError(err))
+    } finally {
+      setSigningIn(false)
     }
   }
 
@@ -232,6 +243,7 @@ export function useAuth() {
     loading,
     authError,
     firestoreError: apiError,
+    signingIn,
     signIn,
     signOut: signOutUser,
     refreshProfile,

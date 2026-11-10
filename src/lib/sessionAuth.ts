@@ -57,6 +57,9 @@ function persistSession(token: string, user: ApiSessionUser): void {
 export async function exchangeGoogleIdToken(idToken: string): Promise<ApiSessionUser> {
   const base = getApiBase()
   if (!base) throw new Error('API base not configured')
+  if (typeof idToken !== 'string' || idToken.split('.').length !== 3 || !idToken.trim()) {
+    throw new Error('Google sign-in did not return an ID token to exchange.')
+  }
 
   const res = await fetch(`${base}/api/auth/google`, {
     method: 'POST',

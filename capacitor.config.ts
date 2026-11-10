@@ -37,7 +37,7 @@ const config: CapacitorConfig = {
     GoogleAuth: {
       scopes: ['profile', 'email'],
       serverClientId: googleWebClientId,
-      forceCodeForRefreshToken: true,
+      forceCodeForRefreshToken: false,
     },
     LocalNotifications: {
       smallIcon: 'ic_freifeed_notification',

@@ -4,9 +4,10 @@ interface LoginScreenProps {
   onSignIn: () => void
   error?: string | null
   firestoreError?: string | null
+  busy?: boolean
 }
 
-export function LoginScreen({ onSignIn, error, firestoreError }: LoginScreenProps) {
+export function LoginScreen({ onSignIn, error, firestoreError, busy = false }: LoginScreenProps) {
   const nativeApp = isNativeCapacitor()
   return (
     <div className="auth-screen">
@@ -20,9 +21,9 @@ export function LoginScreen({ onSignIn, error, firestoreError }: LoginScreenProp
             ? 'Choose your Google account on this device. You should not leave the app or open Chrome.'
             : 'A Google sign-in popup will open. Allow popups for this site if prompted.'}
         </p>
-        <button type="button" className="btn btn-google" onClick={onSignIn}>
+        <button type="button" className="btn btn-google" onClick={onSignIn} disabled={busy}>
           <GoogleIcon />
-          Sign in with Google
+          {busy ? 'Signing in…' : 'Sign in with Google'}
         </button>
         {firestoreError && <p className="error-text">{firestoreError}</p>}
         {error && <p className="error-text">{error}</p>}

@@ -92,6 +92,7 @@ function App() {
     profile,
     loading,
     authError: profileAuthError,
+    signingIn,
     firestoreError,
     signIn,
     signOut,
@@ -719,10 +720,14 @@ function App() {
               await signIn()
             } catch (e) {
               const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
-              if (code === 'auth/popup-closed-by-user') return
+              if (code === 'auth/popup-closed-by-user') {
+                setSignInError('Sign-in was cancelled.')
+                return
+              }
               setSignInError(e instanceof Error ? e.message : 'Sign in failed')
             }
           }}
+          busy={signingIn}
           error={signInError ?? profileAuthError}
           firestoreError={firestoreError}
         />
