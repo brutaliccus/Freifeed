@@ -1,10 +1,24 @@
+interface FailedItem {
+  id: string
+  description: string
+  lastError?: string
+}
+
 interface SyncStatusBannerProps {
   message: string | null
   status: 'ok' | 'offline' | 'pending' | 'error'
   onRetry?: () => void
+  onDiscard?: () => void
+  failedItems?: FailedItem[]
 }
 
-export function SyncStatusBanner({ message, status, onRetry }: SyncStatusBannerProps) {
+export function SyncStatusBanner({
+  message,
+  status,
+  onRetry,
+  onDiscard,
+  failedItems = [],
+}: SyncStatusBannerProps) {
   if (!message || status === 'ok') return null
 
   return (
@@ -13,12 +27,35 @@ export function SyncStatusBanner({ message, status, onRetry }: SyncStatusBannerP
       role="status"
       aria-live="polite"
     >
-      <span>{message}</span>
-      {(status === 'error' || status === 'offline' || status === 'pending') && onRetry && (
-        <button type="button" className="sync-status-banner__retry" onClick={() => void onRetry()}>
-          Retry
-        </button>
-      )}
+      <div className="sync-status-banner__body">
+        <span>{message}</span>
+        {status === 'error' && failedItems.length > 0 && (
+          <ul className="sync-status-banner__details">
+            {failedItems.map((item) => (
+              <li key={item.id}>
+                {item.description}
+                {item.lastError ? ` — ${item.lastError}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="sync-status-banner__actions">
+        {(status === 'error' || status === 'offline' || status === 'pending') && onRetry && (
+          <button type="button" className="sync-status-banner__retry" onClick={() => void onRetry()}>
+            Retry
+          </button>
+        )}
+        {status === 'error' && onDiscard && failedItems.length > 0 && (
+          <button
+            type="button"
+            className="sync-status-banner__dismiss"
+            onClick={() => onDiscard()}
+          >
+            Dismiss failed
+          </button>
+        )}
+      </div>
     </div>
   )
 }

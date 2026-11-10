@@ -180,17 +180,33 @@ export function combineMilkLots(data: {
 
   const db = getDb()
   const rows: LotRow[] = []
+  const missing: string[] = []
   for (const id of ids) {
     const lot = db
       .prepare('SELECT * FROM milk_lots WHERE household_id = ? AND id = ?')
       .get(householdId, id) as LotRow | undefined
-    if (!lot) throw new HttpsError('not-found', 'Milk bag not found')
+    if (!lot) {
+      missing.push(id)
+      continue
+    }
     const remaining = roundOz(lot.remaining_oz ?? 0)
     if (remaining <= 0) throw new HttpsError('invalid-argument', 'Selected bag has no milk left')
     if (lot.storage !== 'fridge' && lot.storage !== 'frozen') {
       throw new HttpsError('invalid-argument', 'Invalid storage on milk bag')
     }
     rows.push(lot)
+  }
+  if (missing.length > 0) {
+    if (missing.length === ids.length) {
+      throw new HttpsError(
+        'not-found',
+        'Milk bags no longer exist — they may have already been combined or deleted',
+      )
+    }
+    throw new HttpsError(
+      'not-found',
+      `Milk bag not found (${missing.join(', ')}). Other selected bags are still in inventory.`,
+    )
   }
 
   const storageSet = new Set(rows.map((r) => r.storage))

@@ -161,4 +161,51 @@ export async function flushOfflineQueue(execute: CallableExecutor): Promise<{
   return { flushed, failed }
 }
 
+/** Move permanently failed items back to pending so Retry actually sends them again. */
+export function requeueFailedMutations(): number {
+  const queue = readQueue()
+  let count = 0
+  const next = queue.map((q) => {
+    if (q.retries < MAX_RETRIES) return q
+    count++
+    return { ...q, retries: 0 }
+  })
+  if (count > 0) writeQueue(next)
+  return count
+}
+
+/** Drop permanently failed items after the user confirms they do not need to be sent. */
+export function discardFailedMutations(): number {
+  const queue = readQueue()
+  const next = queue.filter((q) => q.retries < MAX_RETRIES)
+  const count = queue.length - next.length
+  if (count > 0) writeQueue(next)
+  return count
+}
+
+function humanizeOpName(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
+}
+
+/** Short description of a queued mutation for the sync banner (never silent about what would be lost). */
+export function describeQueuedMutation(item: QueuedMutation): string {
+  const payload =
+    item.payload && typeof item.payload === 'object'
+      ? (item.payload as Record<string, unknown>)
+      : {}
+  if (item.name === 'combineMilkLots') {
+    const ids = Array.isArray(payload.lotIds) ? payload.lotIds.map(String) : []
+    const addRaw = payload.addOz
+    const addNum = addRaw == null || addRaw === '' ? 0 : Number(addRaw)
+    const add = Number.isFinite(addNum) && addNum > 0 ? ` plus ${addNum} oz fresh` : ''
+    const count = ids.length
+    return `Combine ${count || 'selected'} milk lot${count === 1 ? '' : 's'}${add}`
+  }
+  if (item.name === 'redistributeMilkLot') {
+    const ids = Array.isArray(payload.lotIds) ? payload.lotIds : []
+    return `Redistribute ${ids.length || 'selected'} milk lot${ids.length === 1 ? '' : 's'}`
+  }
+  return humanizeOpName(item.name)
+}
+
 export const OFFLINE_QUEUE_MAX_RETRIES = MAX_RETRIES

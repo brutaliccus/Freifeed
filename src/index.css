@@ -6189,7 +6189,30 @@ input {
   color: #ffe8ec;
 }
 
-.sync-status-banner__retry {
+.sync-status-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.sync-status-banner__details {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.sync-status-banner__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.sync-status-banner__retry,
+.sync-status-banner__dismiss {
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-md);
@@ -6199,6 +6222,10 @@ input {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.sync-status-banner__dismiss {
+  background: rgba(0, 0, 0, 0.18);
 }
 
 /* Home empty state */

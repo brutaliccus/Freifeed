@@ -1,30 +1,46 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushPendingMutations } from './mutationQueue'
-import { getFailedQueueCount, getFailedQueueItems, getOfflineQueueCount } from './offlineQueue'
+import {
+  describeQueuedMutation,
+  discardFailedMutations,
+  getFailedQueueCount,
+  getFailedQueueItems,
+  getOfflineQueueCount,
+  requeueFailedMutations,
+  type QueuedMutation,
+} from './offlineQueue'
 import { useOnlineStatus } from './networkStatus'
 
 export { flushPendingMutations }
 
-function humanizeOpName(name: string): string {
-  // transferMilkLotToFreezer → Transfer milk lot to freezer
-  const spaced = name
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/^./, (c) => c.toUpperCase())
-  return spaced
+export type FailedSyncItem = {
+  id: string
+  name: string
+  description: string
+  lastError?: string
+}
+
+export function describeFailedItems(items: QueuedMutation[] = getFailedQueueItems()): FailedSyncItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    description: describeQueuedMutation(item),
+    lastError: item.lastError,
+  }))
 }
 
 function formatFailedSummary(): string | null {
   const failed = getFailedQueueItems()
   if (failed.length === 0) return null
-  const first = failed[0]!
-  const op = humanizeOpName(first.name)
-  const detail = first.lastError?.trim()
-  if (failed.length === 1) {
-    return detail ? `${op} failed: ${detail}` : `${op} failed to sync — tap Retry`
-  }
+  const descriptions = failed.map((item) => describeQueuedMutation(item))
+  const head = descriptions[0] ?? 'A change'
+  const detail = failed[0]?.lastError?.trim()
   const more = failed.length - 1
-  const head = detail ? `${op} failed: ${detail}` : `${op} failed`
-  return `${head} (+${more} more) — tap Retry`
+  const base = detail ? `${head} failed: ${detail}` : `${head} failed`
+  if (more === 0) {
+    return `${base}. Retry to send it again, or dismiss if it already looks right.`
+  }
+  return `${base} (+${more} more: ${descriptions.slice(1).join(', ')}). Retry to send them again, or dismiss if inventory already looks right.`
 }
 
 export function useSyncQueue() {
@@ -32,12 +48,14 @@ export function useSyncQueue() {
   const [pendingCount, setPendingCount] = useState(getOfflineQueueCount)
   const [failedCount, setFailedCount] = useState(getFailedQueueCount)
   const [failedSummary, setFailedSummary] = useState<string | null>(formatFailedSummary)
+  const [failedItems, setFailedItems] = useState(describeFailedItems)
 
   useEffect(() => {
     const bump = () => {
       setPendingCount(getOfflineQueueCount())
       setFailedCount(getFailedQueueCount())
       setFailedSummary(formatFailedSummary())
+      setFailedItems(describeFailedItems())
     }
     window.addEventListener('freifeed-offline-queue-changed', bump)
     window.addEventListener('freifeed-pending-mutations-changed', bump)
@@ -60,11 +78,11 @@ export function useSyncQueue() {
     return () => window.clearInterval(interval)
   }, [online, pendingCount])
 
-  return { online, pendingCount, failedCount, failedSummary, flush: flushPendingMutations }
+  return { online, pendingCount, failedCount, failedSummary, failedItems, flush: flushPendingMutations }
 }
 
 export function useSyncStatus(errors: (string | null | undefined)[]) {
-  const { online, pendingCount, failedCount, failedSummary, flush } = useSyncQueue()
+  const { online, pendingCount, failedCount, failedSummary, failedItems, flush } = useSyncQueue()
   const activeErrors = errors.filter(Boolean) as string[]
 
   const status: 'ok' | 'offline' | 'pending' | 'error' =
@@ -89,8 +107,13 @@ export function useSyncStatus(errors: (string | null | undefined)[]) {
           : null
 
   const retry = useCallback(async () => {
+    requeueFailedMutations()
     await flush()
   }, [flush])
 
-  return { status, message, online, pendingCount, retry }
+  const discardFailed = useCallback(() => {
+    discardFailedMutations()
+  }, [])
+
+  return { status, message, online, pendingCount, retry, discardFailed, failedItems }
 }

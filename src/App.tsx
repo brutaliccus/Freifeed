@@ -801,8 +801,13 @@ function App() {
       <SyncStatusBanner
         message={sync.message}
         status={sync.status}
+        failedItems={sync.failedItems}
         onRetry={() => {
           void sync.retry()
+          refreshAll()
+        }}
+        onDiscard={() => {
+          sync.discardFailed()
           refreshAll()
         }}
       />
