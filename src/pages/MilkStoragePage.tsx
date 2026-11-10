@@ -314,7 +314,7 @@ export function MilkStoragePage({
         </p>
       ) : (
         <ul
-          className="milk-lot-list"
+          className={`milk-lot-list${combineMode ? ' milk-lot-list--selecting' : ''}`}
           role="tabpanel"
           id={`milk-storage-panel-${tab}`}
           aria-labelledby={`milk-storage-tab-${tab}`}

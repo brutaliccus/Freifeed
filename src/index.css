@@ -1650,6 +1650,15 @@ input {
   gap: 0.65rem;
 }
 
+/* Keep the last bags scrollable above the fixed Combine/Freeze/Thaw bar.
+   Bar buttons are 7.5rem; include bar padding, the bar's offset above the nav,
+   and safe-area inset so every card clears the overlay (fridge and frozen). */
+.milk-lot-list--selecting {
+  padding-bottom: calc(
+    7.5rem + 0.7rem + 0.75rem + var(--safe-bottom) + 0.75rem
+  );
+}
+
 .milk-lot-card {
   display: flex;
   flex-direction: column;
