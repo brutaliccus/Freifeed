@@ -29,12 +29,13 @@ export async function invokeBackend<TReq, TRes>(
 
   return withCallableRetry(async () => {
     const base = getApiBase()!
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    }
     const res = await fetch(`${base}/api/${name}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders(),
-      },
+      headers,
       body: JSON.stringify(payload ?? {}),
     })
 
@@ -43,7 +44,9 @@ export async function invokeBackend<TReq, TRes>(
       | { error?: { code?: string; message?: string } }
       | null
 
-    if (res.status === 401) {
+    // Only drop a live session if the server rejected a token we actually sent.
+    // A queued call that went out without Authorization must not sign the user out.
+    if (res.status === 401 && headers.Authorization) {
       clearSession()
     }
 

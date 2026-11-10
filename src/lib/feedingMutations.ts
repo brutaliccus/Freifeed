@@ -50,7 +50,21 @@ export function feedingFromInput(
   }
 }
 
-function applyMilkSideEffectsOptimistic(householdId: string, feedingId: string, input: FeedingInput) {
+function planPumpLotIds(input: FeedingInput): string[] {
+  if (input.type !== 'pump' || input.volumeOz == null || !input.endAt || !input.milkStorage) return []
+  if (input.addToLotId) return []
+  if (input.milkBagVolumes && input.milkBagVolumes.length > 0) {
+    return input.milkBagVolumes.map(() => newClientId())
+  }
+  return [newClientId()]
+}
+
+function applyMilkSideEffectsOptimistic(
+  householdId: string,
+  feedingId: string,
+  input: FeedingInput,
+  plannedLotIds: string[] = [],
+) {
   if (input.type === 'bottle' && input.milkDeductions && input.milkDeductions.length > 0) {
     optimisticApplyMilkDeductions(householdId, input.milkDeductions)
   }
@@ -65,7 +79,7 @@ function applyMilkSideEffectsOptimistic(householdId: string, feedingId: string, 
       for (let i = 0; i < input.milkBagVolumes.length; i++) {
         const vol = input.milkBagVolumes[i]!
         const lot: MilkLot = {
-          id: newClientId(),
+          id: plannedLotIds[i] ?? newClientId(),
           pumpedAt: Timestamp.fromDate(pumpedAt),
           storedAt: Timestamp.fromDate(storedAt),
           volumeOz: vol,
@@ -81,7 +95,7 @@ function applyMilkSideEffectsOptimistic(householdId: string, feedingId: string, 
       return
     }
     const lot: MilkLot = {
-      id: newClientId(),
+      id: plannedLotIds[0] ?? newClientId(),
       pumpedAt: Timestamp.fromDate(pumpedAt),
       storedAt: Timestamp.fromDate(storedAt),
       volumeOz: input.volumeOz,
@@ -107,17 +121,19 @@ export function createFeedingOptimistic(
 ): string {
   const feedingId = options.clientId ?? newClientId()
   const feeding = feedingFromInput(feedingId, householdId, input)
+  const clientLotIds = planPumpLotIds(input)
   runMutation({
     name: 'createFeeding',
     payload: {
       householdId,
       input: inputToPayload(input),
       clientId: feedingId,
+      clientLotIds,
     },
     coalesceKey: feedingCoalesceKey('create', feedingId),
     optimistic: () => {
       options.onOptimistic(feeding)
-      applyMilkSideEffectsOptimistic(householdId, feedingId, input)
+      applyMilkSideEffectsOptimistic(householdId, feedingId, input, clientLotIds)
     },
   })
   return feedingId
@@ -131,17 +147,19 @@ export function updateFeedingOptimistic(
     onOptimistic: (patch: FeedingInput & { feedingId: string }) => void
   },
 ): void {
+  const clientLotIds = planPumpLotIds(input)
   runMutation({
     name: 'updateFeeding',
     payload: {
       householdId,
       feedingId,
       input: inputToPayload(input),
+      clientLotIds,
     },
     coalesceKey: feedingCoalesceKey('update', feedingId),
     optimistic: () => {
       options.onOptimistic({ ...input, feedingId })
-      applyMilkSideEffectsOptimistic(householdId, feedingId, input)
+      applyMilkSideEffectsOptimistic(householdId, feedingId, input, clientLotIds)
     },
   })
 }

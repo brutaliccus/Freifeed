@@ -208,4 +208,41 @@ export function describeQueuedMutation(item: QueuedMutation): string {
   return humanizeOpName(item.name)
 }
 
+export function rewriteQueuedLotIds(from: string, to: string): void {
+  if (!from || !to || from === to) return
+  const queue = readQueue()
+  let changed = false
+  const next = queue.map((item) => {
+    const payload = rewriteIdsInUnknown(item.payload, from, to)
+    if (payload === item.payload) return item
+    changed = true
+    return { ...item, payload }
+  })
+  if (changed) writeQueue(next)
+}
+
+function rewriteIdsInUnknown(value: unknown, from: string, to: string): unknown {
+  if (value === from) return to
+  if (Array.isArray(value)) {
+    let changed = false
+    const mapped = value.map((entry) => {
+      const next = rewriteIdsInUnknown(entry, from, to)
+      if (next !== entry) changed = true
+      return next
+    })
+    return changed ? mapped : value
+  }
+  if (value && typeof value === 'object') {
+    let changed = false
+    const out: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      const next = rewriteIdsInUnknown(entry, from, to)
+      if (next !== entry) changed = true
+      out[key] = next
+    }
+    return changed ? out : value
+  }
+  return value
+}
+
 export const OFFLINE_QUEUE_MAX_RETRIES = MAX_RETRIES

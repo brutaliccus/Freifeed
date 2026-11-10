@@ -10,6 +10,8 @@ import {
 } from '../src/milk/transfer.js'
 import { deductMilkForBottle, restoreMilkDeductions } from '../src/milk/deductions.js'
 import { HttpsError } from '../src/errors.js'
+import { resolveMilkLotsForPump } from '../src/milk/pump.js'
+import { feedingDocFromInput } from '../src/milk/validation.js'
 import { assertHouseholdMember } from '../src/household.js'
 
 function seed() {
@@ -217,5 +219,51 @@ describe('authz', () => {
       () => assertHouseholdMember(outsiderUid, householdId),
       (err: unknown) => err instanceof HttpsError && err.code === 'permission-denied',
     )
+  })
+})
+
+describe('add-then-combine', () => {
+  afterEach(() => setDbForTests(null))
+
+  it('creates a pump lot with the client id then combines it into an older bag', () => {
+    const { householdId } = seed()
+    const older = insertLot(householdId, {
+      remainingOz: 0.5,
+      volumeOz: 0.5,
+      storedAt: '2026-11-08T15:01:00.000Z',
+      pumpedAt: '2026-11-08T15:01:00.000Z',
+    })
+    const clientLotId = 'client-lot-addcombine'
+    const doc = feedingDocFromInput({
+      type: 'pump',
+      babyId: 'baby1',
+      volumeOz: 4,
+      milkStorage: 'fridge',
+      startAt: '2026-11-10T18:17:00.000Z',
+      endAt: '2026-11-10T18:17:00.000Z',
+      storedAt: '2026-11-10T18:17:00.000Z',
+    })
+    const createdId = resolveMilkLotsForPump(
+      householdId,
+      'feed-add-combine',
+      doc,
+      null,
+      { type: 'pump', babyId: 'baby1', volumeOz: 4, milkStorage: 'fridge' },
+      getDb(),
+      [clientLotId],
+    )
+    assert.equal(createdId, clientLotId)
+
+    const result = combineMilkLots({ householdId, lotIds: [older, clientLotId] })
+    assert.equal(result.lotId, older)
+    assert.equal(result.totalOz, 4.5)
+
+    const survivor = getDb()
+      .prepare('SELECT remaining_oz AS r, volume_oz AS v FROM milk_lots WHERE id=?')
+      .get(older) as { r: number; v: number }
+    assert.equal(survivor.r, 4.5)
+    assert.equal(survivor.v, 4.5)
+    const gone = getDb().prepare('SELECT id FROM milk_lots WHERE id=?').get(clientLotId)
+    assert.equal(gone, undefined)
   })
 })

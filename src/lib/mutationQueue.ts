@@ -6,6 +6,7 @@ import {
   flushOfflineQueue,
   isLikelyOfflineError,
   pendingCoalesceKeys,
+  rewriteQueuedLotIds,
 } from './offlineQueue'
 
 export type MutationResult = { ok: true; queued: boolean }
@@ -27,6 +28,87 @@ export type RunMutationOptions = {
 
 let flushInFlight = false
 const inFlightKeys = new Set<string>()
+
+const lotIdAliases = new Map<string, string>()
+let execChain: Promise<void> = Promise.resolve()
+
+export function resolveLotIdAlias(id: string): string {
+  let current = id
+  const seen = new Set<string>()
+  while (lotIdAliases.has(current) && !seen.has(current)) {
+    seen.add(current)
+    current = lotIdAliases.get(current)!
+  }
+  return current
+}
+
+export function rememberLotIdAlias(from: string, to: string): void {
+  if (!from || !to || from === to) return
+  lotIdAliases.set(from, to)
+  rewriteQueuedLotIds(from, to)
+}
+
+function remapMutationPayload(payload: unknown): unknown {
+  if (Array.isArray(payload)) return payload.map(remapMutationPayload)
+  if (!payload || typeof payload !== 'object') return payload
+  const src = payload as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(src)) {
+    if ((key === 'lotId' || key === 'addToLotId') && typeof value === 'string') {
+      out[key] = resolveLotIdAlias(value)
+    } else if (key === 'lotIds' && Array.isArray(value)) {
+      out[key] = value.map((id) => (typeof id === 'string' ? resolveLotIdAlias(id) : id))
+    } else if (key === 'clientLotIds' && Array.isArray(value)) {
+      out[key] = value.map((id) => (typeof id === 'string' ? resolveLotIdAlias(id) : id))
+    } else if (key === 'milkDeductions' && Array.isArray(value)) {
+      out[key] = value.map((entry) => {
+        if (!entry || typeof entry !== 'object') return entry
+        const row = entry as Record<string, unknown>
+        if (typeof row.lotId !== 'string') return entry
+        return { ...row, lotId: resolveLotIdAlias(row.lotId) }
+      })
+    } else {
+      out[key] = remapMutationPayload(value)
+    }
+  }
+  return out
+}
+
+function enqueueSerial<T>(fn: () => Promise<T>): Promise<T> {
+  const run = execChain.then(fn, fn)
+  execChain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+export type MutationFailureReconciler = (name: string, payload: unknown) => Promise<void>
+let failureReconciler: MutationFailureReconciler | null = null
+
+export function registerMutationFailureReconciler(
+  next: MutationFailureReconciler | null,
+): void {
+  failureReconciler = next
+}
+
+const MILK_MUTATION_NAMES = new Set([
+  'createFeeding',
+  'updateFeeding',
+  'deleteFeeding',
+  'combineMilkLots',
+  'deleteMilkLot',
+  'updateMilkLot',
+  'transferMilkLotToFreezer',
+  'transferMilkLotToFridge',
+  'redistributeMilkLot',
+])
+
+function reconcileIfNeeded(name: string, payload: unknown): void {
+  if (!failureReconciler || !MILK_MUTATION_NAMES.has(name)) return
+  void failureReconciler(name, payload)
+}
+
 
 /** Entity keys with a local optimistic write not yet confirmed by server/queue flush. */
 const pendingMeta = new Map<string, number>()
@@ -67,11 +149,20 @@ export function subscribePendingMutations(listener: () => void): () => void {
 }
 
 async function executeCallable(name: string, payload: unknown): Promise<unknown> {
-  const res = await invokeBackend<unknown, unknown>(name, payload)
-  return res.data
+  const mapped = remapMutationPayload(payload)
+  const res = await invokeBackend<unknown, unknown>(name, mapped)
+  const data = res.data as { milkLotId?: string } | null
+  if (name === 'createFeeding' && data && typeof data === 'object') {
+    const sent = mapped as { clientLotIds?: string[] }
+    const clientLotId = sent.clientLotIds?.[0]
+    if (clientLotId && data.milkLotId) rememberLotIdAlias(clientLotId, data.milkLotId)
+  }
+  return data
 }
 
 export async function flushPendingMutations(): Promise<void> {
+  if (flushInFlight || typeof navigator === 'undefined' || !navigator.onLine) return
+  await enqueueSerial(async () => {
   if (flushInFlight || typeof navigator === 'undefined' || !navigator.onLine) return
   flushInFlight = true
   try {
@@ -88,6 +179,7 @@ export async function flushPendingMutations(): Promise<void> {
     window.dispatchEvent(new CustomEvent('freifeed-offline-queue-changed'))
     window.dispatchEvent(new CustomEvent('freifeed-pending-mutations-changed'))
   }
+  })
 }
 
 function isOnline(): boolean {
@@ -116,6 +208,7 @@ function recordPermanentFailure(
       ? String((err as { message: string }).message)
       : 'Sync failed'
   enqueueFailedMutation(name, payload, message, { coalesceKey })
+  reconcileIfNeeded(name, payload)
   window.dispatchEvent(
     new CustomEvent('freifeed-mutation-failed', {
       detail: failureDetail(name, coalesceKey, err),
@@ -144,7 +237,7 @@ export function runMutation(options: RunMutationOptions): MutationResult {
     return { ok: true, queued }
   }
 
-  const dispatch = async (): Promise<MutationResult> => {
+  const dispatch = (): Promise<MutationResult> => enqueueSerial(async () => {
     if (!isOnline()) {
       enqueueMutation(name, payload, { coalesceKey })
       return finishOk(true)
@@ -178,7 +271,7 @@ export function runMutation(options: RunMutationOptions): MutationResult {
     } finally {
       if (coalesceKey) inFlightKeys.delete(coalesceKey)
     }
-  }
+  })
 
   if (background) {
     void dispatch().then(() => {

@@ -309,3 +309,7 @@ export function optimisticRemoveMilkLotIds(householdId: string, lotIds: string[]
     lotIds,
   )
 }
+
+export function replaceLocalMilkLots(householdId: string, lots: MilkLot[]): void {
+  applyLocal(householdId, () => lots)
+}

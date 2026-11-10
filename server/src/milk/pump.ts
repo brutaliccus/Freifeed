@@ -12,12 +12,20 @@ import {
 type Db = ReturnType<typeof getDb>
 type FeedingDoc = ReturnType<typeof feedingDocFromInput>
 
+function pickClientLotId(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const id = raw.trim()
+  if (id.length < 8 || id.length > 128) return null
+  return id
+}
+
 export function upsertMilkLotForPump(
   householdId: string,
   feedingId: string,
   feedingData: FeedingDoc,
   existingLotId: string | null,
   db: Db = getDb(),
+  clientLotIds: string[] = [],
 ): string | null {
   if (feedingData.type !== 'pump' || feedingData.volumeOz == null || !feedingData.endAt) {
     if (existingLotId) deleteMilkLotIfExists(householdId, existingLotId, db)
@@ -57,7 +65,7 @@ export function upsertMilkLotForPump(
     return existingLotId
   }
 
-  const lotId = newId()
+  const lotId = pickClientLotId(clientLotIds?.[0]) ?? newId()
   db.prepare(
     `INSERT INTO milk_lots (id, household_id, pumped_at, stored_at, volume_oz, remaining_oz, storage,
       feeding_id, note, created_at, updated_at)
@@ -113,6 +121,7 @@ export function createMilkLotsFromVolumes(
   feedingData: FeedingDoc,
   bagVolumes: number[],
   db: Db = getDb(),
+  clientLotIds: string[] = [],
 ): string | null {
   const pumpedAt = feedingData.startAt ?? feedingData.endAt
   const storedAt = feedingData.storedAt ?? pumpedAt
@@ -122,7 +131,7 @@ export function createMilkLotsFromVolumes(
   let firstId: string | null = null
   for (let i = 0; i < bagVolumes.length; i++) {
     const vol = bagVolumes[i]!
-    const lotId = newId()
+    const lotId = pickClientLotId(clientLotIds[i]) ?? newId()
     db.prepare(
       `INSERT INTO milk_lots (id, household_id, pumped_at, stored_at, volume_oz, remaining_oz, storage,
         feeding_id, note, created_at, updated_at)
@@ -152,6 +161,7 @@ export function resolveMilkLotsForPump(
   existingLotId: string | null,
   input: FeedingInputPayload,
   db: Db = getDb(),
+  clientLotIds: string[] = [],
 ): string | null {
   if (feedingData.type !== 'pump' || feedingData.volumeOz == null || !feedingData.endAt) {
     deleteMilkLotIfExists(householdId, existingLotId, db)
@@ -175,8 +185,8 @@ export function resolveMilkLotsForPump(
       )
     }
     deleteMilkLotIfExists(householdId, existingLotId, db)
-    return createMilkLotsFromVolumes(householdId, feedingId, feedingData, bagVolumes, db)
+    return createMilkLotsFromVolumes(householdId, feedingId, feedingData, bagVolumes, db, clientLotIds)
   }
 
-  return upsertMilkLotForPump(householdId, feedingId, feedingData, existingLotId, db)
+  return upsertMilkLotForPump(householdId, feedingId, feedingData, existingLotId, db, clientLotIds)
 }

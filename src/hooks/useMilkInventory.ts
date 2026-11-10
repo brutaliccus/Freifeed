@@ -4,7 +4,9 @@ import { computeMilkSummary } from '../lib/milkLots'
 import { mapMilkLot } from '../lib/firestoreMappers'
 import { MAX_LIST_LIMIT } from '../lib/listQueryClient'
 import { timestampMs } from '../lib/time'
-import { registerMilkInventoryApplier } from '../lib/milkInventoryLocal'
+import { registerMilkInventoryApplier, replaceLocalMilkLots } from '../lib/milkInventoryLocal'
+import { registerMutationFailureReconciler } from '../lib/mutationQueue'
+import { apiListMilkLots } from '../lib/api'
 import type { MilkLot } from '../types'
 
 /**
@@ -40,7 +42,23 @@ export function useMilkInventory(householdId: string | null) {
       apply: (updater) => applyRef.current(updater as (prev: MilkLot[]) => MilkLot[]),
       getLots: () => lotsRef.current,
     })
-    return () => registerMilkInventoryApplier(null)
+    registerMutationFailureReconciler(async (name, payload) => {
+      const hid =
+        payload && typeof payload === 'object' && 'householdId' in payload
+          ? String((payload as { householdId?: string }).householdId ?? '')
+          : ''
+      if (!hid || hid !== householdId) return
+      try {
+        const lots = await apiListMilkLots(hid)
+        replaceLocalMilkLots(hid, lots)
+      } catch (err) {
+        console.warn(`Failed to reconcile milk inventory after ${name}`, err)
+      }
+    })
+    return () => {
+      registerMilkInventoryApplier(null)
+      registerMutationFailureReconciler(null)
+    }
   }, [householdId])
 
   const summary = useMemo(() => computeMilkSummary(data), [data])

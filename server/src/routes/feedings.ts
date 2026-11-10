@@ -61,6 +61,9 @@ export function registerFeedingRoutes(app: FastifyInstance) {
       const householdId = body.householdId as string
       const input = body.input as FeedingInputPayload
       const clientId = body.clientId as string | null | undefined
+      const clientLotIds = Array.isArray(body.clientLotIds)
+        ? (body.clientLotIds as unknown[]).map((id) => String(id))
+        : []
       if (!householdId || !input) throw new HttpsError('invalid-argument', 'Missing fields')
       assertHouseholdMember(uid, householdId)
       assertBabyExists(householdId, parseBabyId(input.babyId))
@@ -78,11 +81,17 @@ export function registerFeedingRoutes(app: FastifyInstance) {
         const existing = db
           .prepare('SELECT id FROM feedings WHERE household_id = ? AND id = ?')
           .get(householdId, feedingId)
-        if (existing) return { feedingId }
+        if (existing) {
+          const row = db
+            .prepare('SELECT milk_lot_id AS milkLotId FROM feedings WHERE household_id = ? AND id = ?')
+            .get(householdId, feedingId) as { milkLotId: string | null } | undefined
+          return { feedingId, milkLotId: row?.milkLotId ?? null }
+        }
       } else {
         feedingId = newId()
       }
 
+      let createdMilkLotId: string | null = null
       const tx = db.transaction(() => {
         db.prepare(
           `INSERT INTO feedings (id, household_id, type, baby_id, side, start_at, end_at, volume_oz,
@@ -126,17 +135,25 @@ export function registerFeedingRoutes(app: FastifyInstance) {
           }
         }
 
-        const milkLotId = resolveMilkLotsForPump(householdId, feedingId, doc, null, input, db)
+        createdMilkLotId = resolveMilkLotsForPump(
+          householdId,
+          feedingId,
+          doc,
+          null,
+          input,
+          db,
+          clientLotIds,
+        )
 
-        if (milkDeductions.length > 0 || milkLotId) {
+        if (milkDeductions.length > 0 || createdMilkLotId) {
           db.prepare(
             `UPDATE feedings SET milk_deductions=?, milk_lot_id=?, updated_at=?
              WHERE household_id=? AND id=?`,
-          ).run(toJson(milkDeductions), milkLotId, now, householdId, feedingId)
+          ).run(toJson(milkDeductions), createdMilkLotId, now, householdId, feedingId)
         }
       })
       tx()
-      return { feedingId }
+      return { feedingId, milkLotId: createdMilkLotId }
     },
     { collections: () => ['feedings', 'milkLots'] },
   )
