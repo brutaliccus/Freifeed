@@ -8,7 +8,7 @@ services:
     image: freifeed-api:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8787:8080"
     environment:
       PORT: "8080"
       HOST: "0.0.0.0"
@@ -20,8 +20,6 @@ services:
       FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     env_file:
-      - path: /etc/freifeed/tunnel.env
-        required: false
       - path: .env
         required: false
     volumes:
@@ -30,25 +28,6 @@ services:
       - freifeed
     mem_limit: 256m
     cpus: 1.0
-
-  cloudflared:
-    container_name: freifeed-cloudflared
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
-    env_file:
-      - path: /etc/freifeed/tunnel.env
-        required: false
-      - path: .env
-        required: false
-    networks:
-      - freifeed
-    depends_on:
-      - freifeed-api
-    mem_limit: 128m
-    cpus: 0.5
 
 volumes:
   freifeed-data:

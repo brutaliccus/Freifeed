@@ -42,8 +42,9 @@ export async function handleSse(request: FastifyRequest, reply: FastifyReply) {
   reply.hijack()
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
     'Access-Control-Allow-Origin': request.headers.origin ?? '*',
   })
   reply.raw.write(`data: ${JSON.stringify({ ok: true, at: new Date().toISOString() })}\n\n`)

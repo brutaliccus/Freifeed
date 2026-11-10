@@ -22,16 +22,15 @@ Branch: `pi-backend` (from `main` @ `d07e0ae`).
 
 ## Env vars (server)
 
-See `server/.env.example`: `JWT_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `CORS_ORIGINS`, `DATA_DIR`, `PORT`, `TUNNEL_TOKEN`, optional FCM / `GOOGLE_APPLICATION_CREDENTIALS`.
+See `server/.env.example`: `JWT_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `CORS_ORIGINS`, `DATA_DIR`, `PORT`, optional FCM / `GOOGLE_APPLICATION_CREDENTIALS`.
 
 ## Run compose on the Pi
 
 ```bash
-# /etc/freifeed/tunnel.env should contain TUNNEL_TOKEN=...
 cd /path/to/Freifeed/server
 cp .env.example .env   # set JWT_SECRET
 docker compose up -d --build
-# API: 127.0.0.1:8080 only; cloudflared on same network → freifeed-api:8080
+# API published on host :8787; NPM terminates TLS for buba.freiverse.com
 ```
 
 ## Export / import
@@ -77,7 +76,7 @@ Partner nursing push is wired as a **no-op with a one-time log** when `FCM_*` / 
 - **Auth REST export** needs admin scope; mitigated via `firebase auth:export` in the script.
 - **FCM** not live without a service account on the Pi (by design for staging).
 - **APK / Hosting:** cannot deploy Hosting or ship a phone APK in this phase without Firebase write; preview path documented.
-- Cloudflare **TUNNEL_TOKEN** must be supplied on the Pi (never committed).
+- Joseph configures `buba.freiverse.com` in Nginx Proxy Manager → `http://<pi>:8787` (Websockets Support on).
 
 ## Commit SHAs
 

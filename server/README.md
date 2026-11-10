@@ -24,12 +24,14 @@ Firebase Auth UIDs are preserved when users are imported (`google_sub` / email m
 ## Docker on the Pi (arm64)
 
 ```bash
-# On the Pi — put TUNNEL_TOKEN in /etc/freifeed/tunnel.env (or server/.env)
-cd /path/to/Freifeed/server
+cd /opt/stacks/freifeed
+# create .env with JWT_SECRET (do not commit it)
 docker compose up -d --build
 ```
 
-- API binds **only** `127.0.0.1:8080` (nginx/cloudflared terminate TLS).
+- API is published on host port **8787** (plain HTTP). Nginx Proxy Manager terminates TLS for `buba.freiverse.com` and proxies to `http://<pi-lan-ip>:8787`.
+- Until NPM is live, test from the LAN: `http://pihole:8787/api/health`.
+- Enable **Websockets Support** in NPM; the API trusts `X-Forwarded-*` (`trustProxy: true`).
 - Data volume `freifeed-data` → `/data` (SQLite + photos + hourly backups).
 - Container name: `freifeed-api`.
 
